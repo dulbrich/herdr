@@ -101,6 +101,8 @@ pub struct PaneSnapshot {
     pub cwd: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub private: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -338,6 +340,7 @@ fn capture_tab(
             .or_else(|| terminal.map(|terminal| terminal.cwd.clone()))
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| "/".into()));
         let label = terminal.and_then(|terminal| terminal.manual_label.clone());
+        let private = terminal.is_some_and(|terminal| terminal.private);
         let (agent_name, managed_agent_kind) = terminal
             .filter(|terminal| !terminal.managed_agent_launch_pending())
             .map(|terminal| {
@@ -383,6 +386,7 @@ fn capture_tab(
             PaneSnapshot {
                 cwd,
                 label,
+                private,
                 agent_name,
                 managed_agent_kind,
                 agent_session,
@@ -595,6 +599,32 @@ mod tests {
     }
 
     #[test]
+    fn private_pane_flag_is_captured_and_survives_json_round_trip() {
+        let mut state = state_with_workspaces(&["private-snapshot"]);
+        let root = state.workspaces[0].tabs[0].root_pane;
+        let terminal_id = state.workspaces[0].tabs[0].panes[&root]
+            .attached_terminal_id
+            .clone();
+        assert!(state
+            .terminals
+            .get_mut(&terminal_id)
+            .unwrap()
+            .set_private(true));
+
+        let captured = capture_from_state(&state);
+        assert!(captured.workspaces[0].tabs[0].panes[&root.raw()].private);
+
+        let json = serde_json::to_string(&captured).unwrap();
+        let restored: SessionSnapshot = serde_json::from_str(&json).unwrap();
+        assert!(restored.workspaces[0].tabs[0].panes[&root.raw()].private);
+
+        // A snapshot written before the flag existed reads as not private.
+        let legacy = json.replace("\"private\":true", "\"label\":\"old\"");
+        let legacy: SessionSnapshot = serde_json::from_str(&legacy).unwrap();
+        assert!(!legacy.workspaces[0].tabs[0].panes[&root.raw()].private);
+    }
+
+    #[test]
     fn managed_agent_snapshot_omits_pending_and_persists_active_ownership() {
         let mut state = state_with_workspaces(&["managed-snapshot"]);
         let root = state.workspaces[0].tabs[0].root_pane;
@@ -700,6 +730,7 @@ mod tests {
         panes.insert(
             0,
             PaneSnapshot {
+                private: false,
                 cwd: PathBuf::from("/home/can/Projects/herdr"),
                 label: None,
                 agent_name: None,
@@ -712,6 +743,7 @@ mod tests {
         panes.insert(
             1,
             PaneSnapshot {
+                private: false,
                 cwd: PathBuf::from("/home/can/Projects/website"),
                 label: Some("website".into()),
                 agent_name: None,
@@ -1398,6 +1430,7 @@ mod tests {
         panes.insert(
             0,
             PaneSnapshot {
+                private: false,
                 cwd: PathBuf::from("/tmp/this-directory-does-not-exist-for-herdr-test"),
                 label: None,
                 agent_name: None,
@@ -1410,6 +1443,7 @@ mod tests {
         panes.insert(
             1,
             PaneSnapshot {
+                private: false,
                 cwd: std::env::var("HOME")
                     .map(PathBuf::from)
                     .unwrap_or_else(|_| PathBuf::from("/tmp")),

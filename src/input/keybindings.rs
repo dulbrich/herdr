@@ -40,6 +40,7 @@ pub(crate) enum KeybindAction {
     MoveTabNext,
     CloseTab,
     RenamePane,
+    TogglePanePrivacy,
     FocusPaneLeft,
     FocusPaneDown,
     FocusPaneUp,
@@ -120,6 +121,10 @@ pub(crate) fn resolve_non_indexed_action(
         (&keybinds.move_tab_next, KeybindAction::MoveTabNext),
         (&keybinds.close_tab, KeybindAction::CloseTab),
         (&keybinds.rename_pane, KeybindAction::RenamePane),
+        (
+            &keybinds.toggle_pane_privacy,
+            KeybindAction::TogglePanePrivacy,
+        ),
         (&keybinds.edit_scrollback, KeybindAction::EditScrollback),
         (&keybinds.clear_pane, KeybindAction::ClearPane),
         (&keybinds.copy_mode, KeybindAction::CopyMode),

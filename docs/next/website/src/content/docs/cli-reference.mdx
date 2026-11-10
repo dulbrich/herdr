@@ -218,6 +218,7 @@ herdr pane focus --direction left|right|up|down [--pane ID|--current]
 herdr pane resize --direction left|right|up|down [--amount FLOAT] [--pane ID|--current]
 herdr pane zoom [<pane_id>|--pane ID|--current] [--toggle|--on|--off]
 herdr pane rename <pane_id> <label>|--clear
+herdr pane private <pane_id> [--on|--off]
 herdr pane input [<pane_id>|--pane ID|--current] --right-click herdr|pane
 herdr pane split [<pane_id>|--pane ID|--current] --direction right|down [--ratio FLOAT] [--cwd PATH] [--env KEY=VALUE] [--right-click herdr|pane] [--focus] [--no-focus]
 herdr pane swap --direction left|right|up|down [--pane ID|--current]
@@ -227,6 +228,16 @@ herdr pane move <pane_id> --new-tab [--workspace ID] [--label TEXT] [--focus|--n
 herdr pane move <pane_id> --new-workspace [--label TEXT] [--tab-label TEXT] [--focus|--no-focus]
 herdr pane close <pane_id>
 ```
+
+`pane private` hides a pane from the socket API. While a pane is private, `pane read`,
+`pane send-text`, `pane send-keys`, `pane run`, `pane wait-output`, `pane process-info`,
+the scroll and copy-mode commands, and the `agent` commands that read, prompt, or wait
+on its occupant return `pane_private`. `pane list`, `pane get`, `pane current`, and
+`agent list` still show it, with `"private": true` and only its identity and label:
+no working directory, title, agent status, or scroll state. Any caller may turn privacy
+on. `--off` is honored only from the Herdr UI (the pane menu or `toggle_pane_privacy`,
+default `prefix+shift+i`), so an agent cannot undo it. The pane border and the sidebar
+say `private` while it is on, and the setting survives a session restore.
 
 For pane commands that accept `--current`, Herdr uses the calling pane's
 `HERDR_PANE_ID` when the command runs inside a Herdr pane. For `pane split`,

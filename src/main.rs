@@ -173,6 +173,7 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # switch_workspace = ""   # optional indexed binding, e.g. "prefix+shift+1..9"
 # close_tab = "prefix+shift+x"
 # rename_pane = "prefix+shift+p"
+# toggle_pane_privacy = "prefix+shift+i"  # hide the focused pane from agents (socket API), or show it again
 # edit_scrollback = "prefix+e"
 # clear_pane = ""                  # unbound; e.g. "prefix+ctrl+k"
 # focus_pane_left = "prefix+h"

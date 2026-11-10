@@ -266,6 +266,9 @@ impl App {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) else {
             return Err(error("pane_not_found", "pane not found"));
         };
+        if let Some(refusal) = self.private_pane_refusal(id, ws_idx, pane_id) {
+            return Err(refusal);
+        }
         if !self.state.pane_visible_on_active_surface(ws_idx, pane_id) {
             return Err(error("stale_target", "pane is no longer visible"));
         }

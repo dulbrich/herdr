@@ -141,6 +141,10 @@ pub struct TerminalState {
     reported_resume_revision: u64,
     pub terminal_title: Option<String>,
     pub manual_label: Option<String>,
+    /// Hidden from socket API callers: screen reads and input are refused and
+    /// metadata is reduced to identity. Set from the UI or the API; only the UI
+    /// can clear it. See `App::private_pane_refusal`.
+    pub private: bool,
     pub agent_name: Option<String>,
     agent_name_owner: Option<AgentNameOwner>,
     managed_agent: Option<ManagedAgent>,
@@ -181,6 +185,7 @@ impl TerminalState {
             reported_resume_revision: 0,
             terminal_title: None,
             manual_label: None,
+            private: false,
             agent_name: None,
             agent_name_owner: None,
             managed_agent: None,
@@ -2105,6 +2110,17 @@ impl TerminalState {
 
     pub fn clear_manual_label(&mut self) {
         self.manual_label = None;
+    }
+
+    /// Hide or show this pane's screen and input for socket API callers.
+    /// Returns true when the flag changed.
+    pub fn set_private(&mut self, private: bool) -> bool {
+        if self.private == private {
+            return false;
+        }
+        self.private = private;
+        self.revision = self.revision.wrapping_add(1);
+        true
     }
 
     pub fn set_agent_name(&mut self, name: String) {

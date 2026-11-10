@@ -744,7 +744,16 @@ fn render_pane_border_titles(
         let Some(title) = ws
             .pane_state(info.id)
             .and_then(|pane| app.terminals.get(&pane.attached_terminal_id))
-            .and_then(|terminal| terminal.border_label(app.show_agent_labels_on_pane_borders))
+            .and_then(|terminal| {
+                // A private pane is marked on its border so the user can see which
+                // panes agents cannot read.
+                let label = terminal.border_label(app.show_agent_labels_on_pane_borders);
+                match (label, terminal.private) {
+                    (Some(label), true) => Some(format!("{label} \u{00b7} private")),
+                    (None, true) => Some("private".to_string()),
+                    (label, false) => label,
+                }
+            })
             .and_then(|label| pane_border_title(&label, info.rect.width, info.is_focused))
         else {
             continue;

@@ -53,6 +53,7 @@ impl ClientContextMenuOverlay {
             ClientContextMenuTarget::Pane {
                 source_pane_id,
                 has_manual_label,
+                private,
                 right_click_passthrough,
                 ..
             } => {
@@ -60,6 +61,14 @@ impl ClientContextMenuOverlay {
                 if *has_manual_label {
                     items.push(item("Clear pane name", Action::ClearPaneName));
                 }
+                items.push(item(
+                    if *private {
+                        "Show pane to agents"
+                    } else {
+                        "Hide pane from agents"
+                    },
+                    Action::TogglePanePrivacy,
+                ));
                 if source_pane_id.is_some() {
                     items.push(item("Swap with focused pane", Action::SwapWithFocusedPane));
                 }
@@ -159,6 +168,7 @@ impl ClientShellState {
                 workspace_id: pane.workspace_id.clone(),
                 source_pane_id,
                 has_manual_label: pane.label.is_some(),
+                private: pane.private,
                 right_click_passthrough: pane.right_click_passthrough,
             },
             x,
@@ -365,8 +375,9 @@ impl ClientShellState {
         outcome: &mut ClientShellInput,
     ) {
         use crate::api::schema::{
-            Method, PaneInputSetParams, PaneRenameParams, PaneRightClickTarget, PaneSplitParams,
-            PaneSwapParams, PaneTarget, PaneZoomMode, PaneZoomParams, SplitDirection,
+            Method, PaneInputSetParams, PaneRenameParams, PaneRightClickTarget,
+            PaneSetPrivateParams, PaneSplitParams, PaneSwapParams, PaneTarget, PaneZoomMode,
+            PaneZoomParams, SplitDirection,
         };
 
         match action {
@@ -436,6 +447,20 @@ impl ClientShellState {
                 }),
                 outcome,
             ),
+            ClientContextMenuAction::TogglePanePrivacy => {
+                let private = self
+                    .snapshot
+                    .as_deref()
+                    .and_then(|snapshot| snapshot.panes.iter().find(|pane| pane.pane_id == pane_id))
+                    .is_some_and(|pane| pane.private);
+                self.push_endpoint_method(
+                    Method::PaneSetPrivate(PaneSetPrivateParams {
+                        pane_id,
+                        private: !private,
+                    }),
+                    outcome,
+                )
+            }
             ClientContextMenuAction::ToggleRightClickPassthrough => self.push_endpoint_method(
                 Method::PaneInputSet(PaneInputSetParams {
                     pane_id,

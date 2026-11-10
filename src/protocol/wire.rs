@@ -1060,6 +1060,9 @@ pub struct ClientShellPane {
     pub workspace_id: String,
     pub tab_id: String,
     pub label: Option<String>,
+    /// Hidden from socket API callers; the UI still shows it and may clear it.
+    #[serde(default)]
+    pub private: bool,
     pub cwd: Option<String>,
     pub foreground_cwd: Option<String>,
     pub focused: bool,
@@ -2842,6 +2845,7 @@ mod tests {
                 agent_status: crate::api::schema::AgentStatus::Idle,
             }],
             panes: vec![ClientShellPane {
+                private: false,
                 pane_id: "w1:p1".into(),
                 workspace_id: "w1".into(),
                 tab_id: "w1:t1".into(),

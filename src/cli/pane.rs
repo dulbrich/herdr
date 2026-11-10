@@ -313,6 +313,13 @@ mod tests {
                 json!({"pane_id": "pane", "source": "recent", "format": "text", "strip_ansi": true}),
             ),
             (
+                "private",
+                vec!["pane", "--off"],
+                "cli:pane:private",
+                "pane.set_private",
+                json!({"pane_id": "pane", "private": false}),
+            ),
+            (
                 "rename",
                 vec!["pane", "--clear"],
                 "cli:pane:rename",
@@ -1016,6 +1023,7 @@ mod tests {
             "send-keys",
             "run",
             "rename",
+            "private",
             "input",
             "move",
             "report-agent",

@@ -357,6 +357,19 @@ crate::cli::projection::cli_params! {
 }
 
 crate::cli::projection::cli_params! {
+    /// `pane.set_private`: hide a pane from socket API callers (`private: true`) or,
+    /// from the Herdr UI only, show it again (`private: false`).
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+    pub struct PaneSetPrivateParams => PaneSetPrivateProjection {
+        pub pane_id: String => Field::new(String::new()).input(binding::pane_id()),
+        #[serde(default = "super::common::default_true")]
+        pub private: bool => Field::new(true)
+            .input(Input::flag("on", |slot, _| { *slot = true; Ok(()) }).configure(|arg| arg.conflicts_with("off")))
+            .input(Input::flag("off", |slot, _| { *slot = false; Ok(()) })),
+    }
+}
+
+crate::cli::projection::cli_params! {
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
     pub struct PaneSendTextParams => PaneSendTextProjection {
         pub pane_id: String => Field::new(String::new()).input(binding::pane_id()),
@@ -502,6 +515,10 @@ pub struct PaneInfo {
     pub workspace_id: String,
     pub tab_id: String,
     pub focused: bool,
+    /// The pane is hidden from socket API callers: `pane.read` and input methods
+    /// return `pane_private`, and this record carries only identity fields.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub private: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

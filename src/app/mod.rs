@@ -109,6 +109,9 @@ pub struct App {
     pub event_tx: mpsc::Sender<AppEvent>,
     pub(crate) event_rx: mpsc::Receiver<AppEvent>,
     pub(crate) api_rx: tokio::sync::mpsc::UnboundedReceiver<crate::api::ApiRequestMessage>,
+    /// True while handling a request that came from an attached client shell (the
+    /// Herdr UI) rather than the socket API. Private panes answer the two differently.
+    pub(crate) client_local_request: bool,
     pub(crate) event_hub: crate::api::EventHub,
     pub(crate) last_focus: Option<(usize, crate::layout::PaneId)>,
     pub(crate) policy: AppPolicy,
@@ -679,6 +682,7 @@ impl App {
             last_render_at: None,
             last_presentation_at: None,
             api_rx,
+            client_local_request: false,
             event_hub,
             last_focus,
             policy,

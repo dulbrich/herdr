@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Panes can be made private. A private pane stays in `pane list`, `pane get`, and `agent list` with only its identity and label, and every API method that reads its screen or sends it input returns `pane_private`, including `agent prompt`, `agent wait`, and `agent read`. Any client can hide a pane with `herdr pane private <pane_id>`, the pane menu, or `prefix+shift+i`; only the Herdr UI can show it again, so an agent cannot undo it. The border and sidebar say `private`, and the setting survives a restore.
+
 ## [0.9.5] - 2026-10-14
 
 This is a hotfix release for v0.9.4. See the v0.9.4 notes for the full feature release: https://github.com/herdrdev/herdr/releases/tag/v0.9.4

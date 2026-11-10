@@ -1837,6 +1837,7 @@ fn copy_mode_survives_mouse_motion_and_parks_across_focus_changes() {
     unfocused.focused_pane_id = Some("pane_2".into());
     unfocused.panes[0].focused = false;
     unfocused.panes.push(ClientShellPane {
+        private: false,
         pane_id: "pane_2".into(),
         workspace_id: "ws_1".into(),
         tab_id: "tab_1".into(),

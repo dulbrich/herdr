@@ -519,6 +519,7 @@ pub(super) enum ClientContextMenuAction {
     NewTab,
     RenamePane,
     ClearPaneName,
+    TogglePanePrivacy,
     SwapWithFocusedPane,
     SplitRight,
     SplitDown,
@@ -546,6 +547,7 @@ pub(super) enum ClientContextMenuTarget {
         workspace_id: String,
         source_pane_id: Option<String>,
         has_manual_label: bool,
+        private: bool,
         right_click_passthrough: bool,
     },
 }

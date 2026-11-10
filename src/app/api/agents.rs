@@ -37,7 +37,11 @@ impl App {
         encode_success(
             id,
             ResponseResult::AgentList {
-                agents: self.collect_agent_infos(),
+                agents: self
+                    .collect_agent_infos()
+                    .into_iter()
+                    .map(|agent| self.redact_agent_info_for_api(agent))
+                    .collect(),
             },
         )
     }
@@ -49,7 +53,12 @@ impl App {
             Err(err) => return encode_error_body(id, self.agent_target_error_body(err)),
         };
 
-        encode_success(id, ResponseResult::AgentInfo { agent })
+        encode_success(
+            id,
+            ResponseResult::AgentInfo {
+                agent: self.redact_agent_info_for_api(agent),
+            },
+        )
     }
 
     pub(super) fn handle_agent_focus(&mut self, id: String, target: AgentTarget) -> String {
@@ -58,7 +67,12 @@ impl App {
             Err(err) => return encode_error_body(id, self.agent_target_error_body(err)),
         };
 
-        encode_success(id, ResponseResult::AgentInfo { agent })
+        encode_success(
+            id,
+            ResponseResult::AgentInfo {
+                agent: self.redact_agent_info_for_api(agent),
+            },
+        )
     }
 
     pub(super) fn handle_agent_rename(&mut self, id: String, params: AgentRenameParams) -> String {
@@ -71,6 +85,12 @@ impl App {
     }
 
     pub(super) fn handle_agent_start(&mut self, id: String, params: AgentStartParams) -> String {
+        // Starting an agent types a command into the pane, so a private pane refuses it.
+        if let Some((ws_idx, pane_id)) = self.parse_current_public_pane_id(&params.pane_id) {
+            if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+                return refusal;
+            }
+        }
         let (agent, argv) = match self.start_agent(params) {
             Ok(started) => started,
             Err(err) => return encode_error_body(id, self.agent_start_error_body(err)),
@@ -153,6 +173,9 @@ impl App {
             Ok(resolved) => resolved,
             Err(err) => return Err(encode_error_body(id, self.agent_target_error_body(err))),
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, resolved.ws_idx, resolved.pane_id) {
+            return Err(refusal);
+        }
         let Some(terminal_id) = self
             .state
             .workspaces
@@ -277,6 +300,9 @@ impl App {
             Ok(resolved) => resolved,
             Err(err) => return encode_error_body(id, self.agent_target_error_body(err)),
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, resolved.ws_idx, resolved.pane_id) {
+            return refusal;
+        }
         let Some((pane, workspace_id)) = self.lookup_runtime(resolved.ws_idx, resolved.pane_id)
         else {
             return agent_not_found(id, &params.target);
@@ -314,6 +340,9 @@ impl App {
             Ok(resolved) => resolved,
             Err(err) => return encode_error_body(id, self.agent_target_error_body(err)),
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, resolved.ws_idx, resolved.pane_id) {
+            return refusal;
+        }
         let Some((pane, _workspace_id)) = self.lookup_runtime(resolved.ws_idx, resolved.pane_id)
         else {
             return agent_not_found(id, &target.target);
@@ -389,6 +418,9 @@ impl App {
             Ok(resolved) => resolved,
             Err(err) => return encode_error_body(id, self.agent_target_error_body(err)),
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, resolved.ws_idx, resolved.pane_id) {
+            return refusal;
+        }
         let Some(terminal_id) = self
             .state
             .workspaces

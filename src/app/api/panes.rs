@@ -1,9 +1,9 @@
 use bytes::Bytes;
 
 use crate::api::schema::{
-    EventData, EventEnvelope, EventKind, PaneClearAgentAuthorityParams, PaneCopyMotion,
-    PaneCopyMotionParams, PaneCopySearchDirection, PaneCopySearchParams, PaneCurrentParams,
-    PaneDirection, PaneEdgesParams, PaneEdgesResult, PaneFocusDirectionParams,
+    AgentInfo, AgentStatus, EventData, EventEnvelope, EventKind, PaneClearAgentAuthorityParams,
+    PaneCopyMotion, PaneCopyMotionParams, PaneCopySearchDirection, PaneCopySearchParams,
+    PaneCurrentParams, PaneDirection, PaneEdgesParams, PaneEdgesResult, PaneFocusDirectionParams,
     PaneFocusDirectionReason, PaneFocusDirectionResult, PaneInfo, PaneInputSetParams,
     PaneLayoutPane, PaneLayoutParams, PaneLayoutRect, PaneLayoutSnapshot, PaneLayoutSplit,
     PaneListParams, PaneMoveDestination, PaneMoveParams, PaneMoveReason, PaneMoveResult,
@@ -12,9 +12,9 @@ use crate::api::schema::{
     PaneRenameParams, PaneReportAgentParams, PaneReportAgentSessionParams,
     PaneReportMetadataParams, PaneResizeParams, PaneResizeReason, PaneResizeResult,
     PaneScrollParams, PaneSelectionReadParams, PaneSendInputParams, PaneSendKeysParams,
-    PaneSendTextParams, PaneSplitParams, PaneSwapParams, PaneSwapReason, PaneSwapResult,
-    PaneTarget, PaneTextPoint, PaneTextRange, PaneZoomMode, PaneZoomParams, PaneZoomReason,
-    PaneZoomResult, ResponseResult,
+    PaneSendTextParams, PaneSetPrivateParams, PaneSplitParams, PaneSwapParams, PaneSwapReason,
+    PaneSwapResult, PaneTarget, PaneTextPoint, PaneTextRange, PaneZoomMode, PaneZoomParams,
+    PaneZoomReason, PaneZoomResult, ResponseResult,
 };
 use crate::app::actions::{PaneZoomCommand, PaneZoomNoopReason};
 use crate::app::App;
@@ -143,7 +143,15 @@ impl App {
 
     pub(super) fn handle_pane_list(&mut self, id: String, params: PaneListParams) -> String {
         match self.collect_panes_for_workspace(params.workspace_id.as_deref()) {
-            Ok(panes) => encode_success(id, ResponseResult::PaneList { panes }),
+            Ok(panes) => encode_success(
+                id,
+                ResponseResult::PaneList {
+                    panes: panes
+                        .into_iter()
+                        .map(|pane| self.redact_pane_info_for_api(pane))
+                        .collect(),
+                },
+            ),
             Err((code, message)) => encode_error(id, &code, message),
         }
     }
@@ -160,7 +168,12 @@ impl App {
             return encode_error(id, "pane_not_found", "pane not found");
         };
 
-        encode_success(id, ResponseResult::PaneCurrent { pane })
+        encode_success(
+            id,
+            ResponseResult::PaneCurrent {
+                pane: self.redact_pane_info_for_api(pane),
+            },
+        )
     }
 
     pub(super) fn handle_pane_get(&mut self, id: String, target: PaneTarget) -> String {
@@ -171,13 +184,21 @@ impl App {
             return pane_not_found(id, &target.pane_id);
         };
 
-        encode_success(id, ResponseResult::PaneInfo { pane })
+        encode_success(
+            id,
+            ResponseResult::PaneInfo {
+                pane: self.redact_pane_info_for_api(pane),
+            },
+        )
     }
 
     pub(super) fn handle_pane_clear(&mut self, id: String, target: PaneTarget) -> String {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&target.pane_id) else {
             return pane_not_found(id, &target.pane_id);
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            return refusal;
+        }
         let Some(runtime) =
             self.state
                 .runtime_for_pane_in_workspace(&self.terminal_runtimes, ws_idx, pane_id)
@@ -194,6 +215,9 @@ impl App {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            return refusal;
+        }
         let Some(runtime) =
             self.state
                 .runtime_for_pane_in_workspace(&self.terminal_runtimes, ws_idx, pane_id)
@@ -213,6 +237,9 @@ impl App {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&target.pane_id) else {
             return pane_not_found(id, &target.pane_id);
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            return refusal;
+        }
         let is_focused = self.state.active == Some(ws_idx)
             && self
                 .state
@@ -277,6 +304,11 @@ impl App {
         id: String,
         params: PaneSelectionReadParams,
     ) -> String {
+        if let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) {
+            if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+                return refusal;
+            }
+        }
         match self.pane_selection_text(&params) {
             Ok(text) => encode_success(
                 id,
@@ -297,6 +329,9 @@ impl App {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            return refusal;
+        }
         let Some(runtime) =
             self.state
                 .runtime_for_pane_in_workspace(&self.terminal_runtimes, ws_idx, pane_id)
@@ -412,6 +447,9 @@ impl App {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            return refusal;
+        }
         let Some(runtime) =
             self.state
                 .runtime_for_pane_in_workspace(&self.terminal_runtimes, ws_idx, pane_id)
@@ -503,7 +541,12 @@ impl App {
         let Some(pane) = self.pane_info(ws_idx, pane_id) else {
             return pane_not_found(id, &target.pane_id);
         };
-        encode_success(id, ResponseResult::PaneInfo { pane })
+        encode_success(
+            id,
+            ResponseResult::PaneInfo {
+                pane: self.redact_pane_info_for_api(pane),
+            },
+        )
     }
 
     pub(super) fn handle_pane_layout(&mut self, id: String, params: PaneLayoutParams) -> String {
@@ -531,6 +574,9 @@ impl App {
         let Some((ws_idx, pane_id)) = self.resolve_optional_pane(params.pane_id.as_deref()) else {
             return encode_error(id, "pane_not_found", "pane not found");
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            return refusal;
+        }
         let Some((runtime, _workspace_id)) = self.lookup_runtime(ws_idx, pane_id) else {
             return encode_error(id, "pane_not_found", "pane not found");
         };
@@ -1506,13 +1552,138 @@ impl App {
         self.state.mark_session_dirty();
         let pane = self.pane_info(ws_idx, pane_id).unwrap();
 
-        encode_success(id, ResponseResult::PaneInfo { pane })
+        encode_success(
+            id,
+            ResponseResult::PaneInfo {
+                pane: self.redact_pane_info_for_api(pane),
+            },
+        )
+    }
+
+    /// `pane.set_private`: hide a pane's screen and input from socket API callers.
+    /// Any caller may make a pane private. Only the Herdr UI may make it visible
+    /// again, so an agent cannot lift privacy a user asked for.
+    pub(super) fn handle_pane_set_private(
+        &mut self,
+        id: String,
+        params: PaneSetPrivateParams,
+    ) -> String {
+        let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) else {
+            return pane_not_found(id, &params.pane_id);
+        };
+        if !params.private && !self.client_local_request {
+            return encode_error(
+                id,
+                "pane_private",
+                "privacy is lifted from the Herdr UI, not through the API",
+            );
+        }
+        let Some(terminal_id) = self
+            .state
+            .workspaces
+            .get(ws_idx)
+            .and_then(|ws| ws.terminal_id(pane_id))
+            .cloned()
+        else {
+            return pane_not_found(id, &params.pane_id);
+        };
+        let Some(terminal) = self.state.terminals.get_mut(&terminal_id) else {
+            return pane_not_found(id, &params.pane_id);
+        };
+        if terminal.set_private(params.private) {
+            self.state.mark_session_dirty();
+        }
+        let pane = self.pane_info(ws_idx, pane_id).unwrap();
+
+        encode_success(
+            id,
+            ResponseResult::PaneInfo {
+                pane: self.redact_pane_info_for_api(pane),
+            },
+        )
+    }
+
+    pub(super) fn pane_is_private(&self, ws_idx: usize, pane_id: PaneId) -> bool {
+        self.state
+            .workspaces
+            .get(ws_idx)
+            .and_then(|ws| ws.terminal_id(pane_id))
+            .and_then(|terminal_id| self.state.terminals.get(terminal_id))
+            .is_some_and(|terminal| terminal.private)
+    }
+
+    /// The error a socket API caller gets for a private pane's screen or input.
+    /// Requests from the Herdr UI are never refused.
+    pub(super) fn private_pane_refusal(
+        &self,
+        id: &str,
+        ws_idx: usize,
+        pane_id: PaneId,
+    ) -> Option<String> {
+        if self.client_local_request || !self.pane_is_private(ws_idx, pane_id) {
+            return None;
+        }
+        let public = self
+            .public_pane_id(ws_idx, pane_id)
+            .unwrap_or_else(|| "pane".to_string());
+        Some(encode_error(
+            id.to_string(),
+            "pane_private",
+            format!("{public} is private: its screen and input are not available through the API"),
+        ))
+    }
+
+    /// What a socket API caller may know about a private pane: that it exists, where
+    /// it is, and its label. Everything that comes from the terminal is dropped.
+    pub(super) fn redact_pane_info_for_api(&self, mut pane: PaneInfo) -> PaneInfo {
+        if self.client_local_request || !pane.private {
+            return pane;
+        }
+        pane.cwd = None;
+        pane.foreground_cwd = None;
+        pane.restore_error = None;
+        pane.agent = None;
+        pane.title = None;
+        pane.terminal_title = None;
+        pane.terminal_title_stripped = None;
+        pane.display_agent = None;
+        pane.agent_status = AgentStatus::Unknown;
+        pane.state_labels.clear();
+        pane.tokens.clear();
+        pane.agent_session = None;
+        pane.scroll = None;
+        pane
+    }
+
+    pub(super) fn redact_agent_info_for_api(&self, mut agent: AgentInfo) -> AgentInfo {
+        if self.client_local_request || !agent.private {
+            return agent;
+        }
+        agent.agent = None;
+        agent.title = None;
+        agent.terminal_title = None;
+        agent.terminal_title_stripped = None;
+        agent.display_agent = None;
+        agent.agent_status = AgentStatus::Unknown;
+        agent.screen_detection_skipped = false;
+        agent.state_labels.clear();
+        agent.tokens.clear();
+        agent.agent_session = None;
+        agent.launch_pending = false;
+        agent.interactive_ready = false;
+        agent.completion_seq = None;
+        agent.cwd = None;
+        agent.foreground_cwd = None;
+        agent
     }
 
     pub(super) fn handle_pane_read(&mut self, id: String, params: PaneReadParams) -> String {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            return refusal;
+        }
         let Some(public_pane_id) = self.public_pane_id(ws_idx, pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
@@ -1917,6 +2088,9 @@ impl App {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            return refusal;
+        }
         let Some(runtime) = self.lookup_runtime_sender(ws_idx, pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
@@ -1935,6 +2109,9 @@ impl App {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            return refusal;
+        }
         let Some(runtime) = self.lookup_runtime_sender(ws_idx, pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
@@ -2040,6 +2217,9 @@ impl App {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
+        if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            return refusal;
+        }
         let Some(runtime) = self.lookup_runtime_sender(ws_idx, pane_id) else {
             return pane_not_found(id, &params.pane_id);
         };
@@ -2489,6 +2669,177 @@ mod tests {
             .runtime_for_pane_in_workspace(&app.terminal_runtimes, 0, pane_id)
             .unwrap();
         assert_eq!(runtime.scroll_metrics().unwrap().max_offset_from_bottom, 0);
+    }
+
+    fn read_params(pane_id: &str) -> PaneReadParams {
+        PaneReadParams {
+            pane_id: pane_id.to_string(),
+            source: crate::api::schema::ReadSource::Recent,
+            lines: None,
+            format: crate::api::schema::ReadFormat::Text,
+            strip_ansi: true,
+            intent: crate::api::schema::ReadIntent::Interactive,
+        }
+    }
+
+    fn error_code(response: &str) -> String {
+        let error: crate::api::schema::ErrorResponse = serde_json::from_str(response).unwrap();
+        error.error.code
+    }
+
+    #[tokio::test]
+    async fn api_private_pane_refuses_reads_and_input_but_stays_listed() {
+        let (mut app, public_pane_id) = app_with_test_workspace();
+
+        // Any caller may hide a pane; the answer already hides what the pane shows.
+        let response = app.handle_pane_set_private(
+            "set".into(),
+            PaneSetPrivateParams {
+                pane_id: public_pane_id.clone(),
+                private: true,
+            },
+        );
+        let success: SuccessResponse = serde_json::from_str(&response).unwrap();
+        let ResponseResult::PaneInfo { pane } = success.result else {
+            panic!("expected pane info response");
+        };
+        assert!(pane.private);
+        assert_eq!(pane.pane_id, public_pane_id);
+        assert!(pane.cwd.is_none());
+        assert!(pane.terminal_title.is_none());
+        assert_eq!(pane.agent_status, AgentStatus::Unknown);
+
+        // Screen and input are refused before the terminal is touched.
+        let read = app.handle_pane_read("read".into(), read_params(&public_pane_id));
+        assert_eq!(error_code(&read), "pane_private");
+        let keys = app.handle_pane_send_keys(
+            "keys".into(),
+            PaneSendKeysParams {
+                pane_id: public_pane_id.clone(),
+                keys: vec!["enter".into()],
+            },
+        );
+        assert_eq!(error_code(&keys), "pane_private");
+        let text = app.handle_pane_send_text(
+            "text".into(),
+            PaneSendTextParams {
+                pane_id: public_pane_id.clone(),
+                text: "rm -rf /".into(),
+            },
+        );
+        assert_eq!(error_code(&text), "pane_private");
+
+        // The pane is still known: listed, located, labelled, but identity only.
+        let list = app.handle_pane_list("list".into(), PaneListParams { workspace_id: None });
+        let success: SuccessResponse = serde_json::from_str(&list).unwrap();
+        let ResponseResult::PaneList { panes } = success.result else {
+            panic!("expected pane list response");
+        };
+        let listed = panes
+            .iter()
+            .find(|pane| pane.pane_id == public_pane_id)
+            .expect("private pane stays listed");
+        assert!(listed.private);
+        assert!(listed.cwd.is_none());
+        assert!(listed.scroll.is_none());
+
+        // Only the Herdr UI may lift privacy.
+        let lift = app.handle_pane_set_private(
+            "lift".into(),
+            PaneSetPrivateParams {
+                pane_id: public_pane_id.clone(),
+                private: false,
+            },
+        );
+        assert_eq!(error_code(&lift), "pane_private");
+        assert!(app.pane_is_private(0, app.state.workspaces[0].tabs[0].root_pane));
+
+        app.client_local_request = true;
+        let lifted = app.handle_pane_set_private(
+            "lift-ui".into(),
+            PaneSetPrivateParams {
+                pane_id: public_pane_id.clone(),
+                private: false,
+            },
+        );
+        let success: SuccessResponse = serde_json::from_str(&lifted).unwrap();
+        let ResponseResult::PaneInfo { pane } = success.result else {
+            panic!("expected pane info response");
+        };
+        assert!(!pane.private);
+        app.client_local_request = false;
+        assert!(!app.pane_is_private(0, app.state.workspaces[0].tabs[0].root_pane));
+    }
+
+    #[tokio::test]
+    async fn api_private_pane_is_fully_visible_to_the_client_shell() {
+        let (mut app, public_pane_id) = app_with_test_workspace();
+        app.handle_pane_set_private(
+            "set".into(),
+            PaneSetPrivateParams {
+                pane_id: public_pane_id.clone(),
+                private: true,
+            },
+        );
+
+        // The UI sees the real record and may still read the pane.
+        app.client_local_request = true;
+        let get = app.handle_pane_get(
+            "get".into(),
+            PaneTarget {
+                pane_id: public_pane_id.clone(),
+            },
+        );
+        let success: SuccessResponse = serde_json::from_str(&get).unwrap();
+        let ResponseResult::PaneInfo { pane } = success.result else {
+            panic!("expected pane info response");
+        };
+        assert!(pane.private);
+        assert!(
+            pane.cwd.is_some(),
+            "the client shell keeps the working directory"
+        );
+        let read = app.handle_pane_read("read".into(), read_params(&public_pane_id));
+        assert_ne!(error_code_or_ok(&read), "pane_private");
+    }
+
+    fn error_code_or_ok(response: &str) -> String {
+        serde_json::from_str::<crate::api::schema::ErrorResponse>(response)
+            .map(|error| error.error.code)
+            .unwrap_or_else(|_| "ok".into())
+    }
+
+    #[tokio::test]
+    async fn api_private_pane_still_takes_layout_requests_and_agent_reports() {
+        let (mut app, public_pane_id) = app_with_test_workspace();
+        app.handle_pane_set_private(
+            "set".into(),
+            PaneSetPrivateParams {
+                pane_id: public_pane_id.clone(),
+                private: true,
+            },
+        );
+        let focus = app.handle_pane_focus(
+            "focus".into(),
+            PaneTarget {
+                pane_id: public_pane_id.clone(),
+            },
+        );
+        let success: SuccessResponse = serde_json::from_str(&focus).unwrap();
+        assert!(matches!(success.result, ResponseResult::PaneInfo { .. }));
+        let rename = app.handle_pane_rename(
+            "rename".into(),
+            PaneRenameParams {
+                pane_id: public_pane_id.clone(),
+                label: Some("secret".into()),
+            },
+        );
+        let success: SuccessResponse = serde_json::from_str(&rename).unwrap();
+        let ResponseResult::PaneInfo { pane } = success.result else {
+            panic!("expected pane info response");
+        };
+        assert_eq!(pane.label.as_deref(), Some("secret"));
+        assert!(pane.private);
     }
 
     #[tokio::test]

@@ -627,13 +627,29 @@ fn agent_from_response(
             error,
         });
     }
-    serde_json::from_value(value["result"]["agent"].clone()).map_err(|_| ErrorResponse {
-        id: request_id.into(),
-        error: ErrorBody {
-            code: "internal_error".into(),
-            message: "failed to decode agent result".into(),
-        },
-    })
+    let agent: crate::api::schema::AgentInfo =
+        serde_json::from_value(value["result"]["agent"].clone()).map_err(|_| ErrorResponse {
+            id: request_id.into(),
+            error: ErrorBody {
+                code: "internal_error".into(),
+                message: "failed to decode agent result".into(),
+            },
+        })?;
+    // The app already reduced a private pane's agent to identity; waiting on it or
+    // prompting it would only ever time out, so refuse up front.
+    if agent.private {
+        return Err(ErrorResponse {
+            id: request_id.into(),
+            error: ErrorBody {
+                code: "pane_private".into(),
+                message: format!(
+                    "{} is private: its state and input are not available through the API",
+                    agent.pane_id
+                ),
+            },
+        });
+    }
+    Ok(agent)
 }
 
 fn agent_wait_success(

@@ -808,6 +808,10 @@
             "pane_id": {
               "type": "string"
             },
+            "private": {
+              "description": "The pane is hidden from socket API callers: `pane.read` and input methods\nreturn `pane_private`, and this record carries only identity fields.",
+              "type": "boolean"
+            },
             "restore_error": {
               "type": [
                 "string",
@@ -3209,6 +3213,22 @@
           "required": [
             "pane_id",
             "text"
+          ],
+          "type": "object"
+        },
+        "PaneSetPrivateParams": {
+          "description": "`pane.set_private`: hide a pane from socket API callers (`private: true`) or,\nfrom the Herdr UI only, show it again (`private: false`).",
+          "properties": {
+            "pane_id": {
+              "type": "string"
+            },
+            "private": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "pane_id"
           ],
           "type": "object"
         },
@@ -6312,6 +6332,22 @@
             "params"
           ],
           "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "pane.set_private",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/PaneSetPrivateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
         }
       ],
       "properties": {
@@ -6605,6 +6641,10 @@
             },
             "pane_id": {
               "type": "string"
+            },
+            "private": {
+              "description": "The agent's pane is private: reads, input and waits return `pane_private`,\nand this record carries only identity fields.",
+              "type": "boolean"
             },
             "revision": {
               "format": "uint64",
@@ -7915,6 +7955,10 @@
             },
             "pane_id": {
               "type": "string"
+            },
+            "private": {
+              "description": "The pane is hidden from socket API callers: `pane.read` and input methods\nreturn `pane_private`, and this record carries only identity fields.",
+              "type": "boolean"
             },
             "restore_error": {
               "type": [

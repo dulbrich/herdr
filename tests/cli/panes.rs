@@ -1,6 +1,60 @@
 use super::harness::*;
 
 #[test]
+fn pane_private_hides_the_pane_from_the_api_and_only_the_ui_can_lift_it() {
+    let base = unique_test_dir();
+    let config_home = base.join("config");
+    let runtime_dir = base.join("runtime");
+    let socket_path = runtime_dir.join("herdr.sock");
+
+    let herdr = spawn_herdr(&config_home, &runtime_dir, &socket_path);
+    wait_for_socket(&socket_path, Duration::from_secs(5));
+
+    let created = run_cli_json(
+        &socket_path,
+        &["workspace", "create", "--cwd", base.to_str().unwrap()],
+    );
+    let pane_id = created["result"]["root_pane"]["pane_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let hidden = run_cli_json(&socket_path, &["pane", "private", &pane_id]);
+    assert_eq!(hidden["result"]["pane"]["private"], true);
+    assert!(hidden["result"]["pane"].get("cwd").is_none());
+
+    let read = run_cli(&socket_path, &["pane", "read", &pane_id]);
+    assert!(!read.status.success());
+    let read_json: serde_json::Value = serde_json::from_slice(&read.stderr).unwrap();
+    assert_eq!(read_json["error"]["code"], "pane_private");
+
+    let keys = run_cli(&socket_path, &["pane", "send-keys", &pane_id, "enter"]);
+    assert!(!keys.status.success());
+    let keys_json: serde_json::Value = serde_json::from_slice(&keys.stderr).unwrap();
+    assert_eq!(keys_json["error"]["code"], "pane_private");
+
+    let listed = run_cli_json(&socket_path, &["pane", "list"]);
+    let pane = listed["result"]["panes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|pane| pane["pane_id"] == pane_id)
+        .expect("private pane stays listed");
+    assert_eq!(pane["private"], true);
+    assert!(pane.get("cwd").is_none());
+
+    let lifted = run_cli(&socket_path, &["pane", "private", &pane_id, "--off"]);
+    assert!(!lifted.status.success());
+    let lifted_json: serde_json::Value = serde_json::from_slice(&lifted.stderr).unwrap();
+    assert_eq!(lifted_json["error"]["code"], "pane_private");
+
+    let still = run_cli_json(&socket_path, &["pane", "get", &pane_id]);
+    assert_eq!(still["result"]["pane"]["private"], true);
+
+    cleanup_spawned_herdr(herdr, base);
+}
+
+#[test]
 fn pane_close_only_removes_the_target_tab_when_other_tabs_exist() {
     let base = unique_test_dir();
     let config_home = base.join("config");

@@ -206,6 +206,7 @@ If a larger recent read still does not reveal the completed response, ask the ag
 - Use `--no-focus` for background work unless the user asked to switch context.
 - Use `--current`, an explicit pane ID, or a unique agent name. Do not rely on another client's focused pane.
 - Parse IDs from JSON responses. Do not derive them from sidebar order or examples.
+- A private pane is one the user hid from agents: `pane list` and `pane get` show it with `"private": true` and no title, directory, or agent status, and reads, input, prompts, and waits on it fail with `pane_private`. Do not try to read it, type into it, or work around the refusal. You may still split, move, resize, focus, or close it as usual. `herdr pane private <pane_id>` makes a pane private; only the user can make it visible again, from the Herdr UI.
 - Do not close workspaces, tabs, panes, or sessions you did not create unless the user explicitly asked. Ordinary CLI/API closes do not inherit the TUI's last-pane confirmation. `workspace close --group` closes the primary workspace and its linked worktree workspaces; never add it merely to bypass `workspace_group_close_required`.
 - Use `--trust-repository` only after the user has verified the repository. It grants per-request Git trust; it is not a routine retry for a failed worktree command.
 - Client and server versions can differ after an update. Check `herdr status` before relying on new server features. A missing method is not permission to stop or upgrade a server.

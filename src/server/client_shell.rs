@@ -141,6 +141,7 @@ pub(super) fn snapshot_with_completions(
                 workspace_id: pane.workspace_id,
                 tab_id: pane.tab_id,
                 label: pane.label,
+                private: pane.private,
                 cwd: pane.cwd,
                 foreground_cwd: pane.foreground_cwd,
                 focused,

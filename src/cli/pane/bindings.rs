@@ -4,8 +4,9 @@ use clap::{ArgMatches, Command};
 
 use crate::api::schema::panes::*;
 use crate::api::schema::{
-    Method, OutputMatch, PaneAgentState, PaneDirection, PaneTarget, PaneWaitForOutputParams,
-    ReadFormat, ReadSource, Request, SplitDirection, READ_FORMATS, READ_SOURCES,
+    Method, OutputMatch, PaneAgentState, PaneDirection, PaneSetPrivateProjection, PaneTarget,
+    PaneWaitForOutputParams, ReadFormat, ReadSource, Request, SplitDirection, READ_FORMATS,
+    READ_SOURCES,
 };
 pub(crate) use crate::cli::projection::parse_choice;
 use crate::cli::projection::{choices, choices_where, Choice};
@@ -594,6 +595,14 @@ pub(super) const LEAVES: &[Leaf] = &[
         Json,
         PaneRenameProjection,
         PaneRename
+    ),
+    leaf!(
+        "private",
+        "Hide a pane from the API; --off is honored only from the Herdr UI",
+        "cli:pane:private",
+        Json,
+        PaneSetPrivateProjection,
+        PaneSetPrivate
     ),
     Leaf {
         name: "input",

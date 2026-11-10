@@ -5,10 +5,23 @@ use super::responses::encode_success;
 
 impl App {
     pub(super) fn handle_session_snapshot(&mut self, id: String) -> String {
+        let mut snapshot = self.session_snapshot();
+        if !self.client_local_request {
+            snapshot.panes = snapshot
+                .panes
+                .into_iter()
+                .map(|pane| self.redact_pane_info_for_api(pane))
+                .collect();
+            snapshot.agents = snapshot
+                .agents
+                .into_iter()
+                .map(|agent| self.redact_agent_info_for_api(agent))
+                .collect();
+        }
         encode_success(
             id,
             ResponseResult::SessionSnapshot {
-                snapshot: Box::new(self.session_snapshot()),
+                snapshot: Box::new(snapshot),
             },
         )
     }

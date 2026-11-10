@@ -515,7 +515,7 @@ fn state_with_scrollable_agents() -> (ClientShellState, ClientEndpointId) {
             .agents
             .iter()
             .map(|agent| ClientShellPane {
-                private: false,
+                access: Default::default(),
                 pane_id: agent.pane_id.clone(),
                 focused: agent.focused,
                 ..projection.panes[0].clone()
@@ -1602,7 +1602,7 @@ fn current_workspace_or_blocked_keeps_foreign_attention_only() {
         },
     ];
     remote.panes.push(ClientShellPane {
-        private: false,
+        access: Default::default(),
         pane_id: "pane_2".into(),
         focused: false,
         ..remote.panes[0].clone()

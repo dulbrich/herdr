@@ -141,10 +141,13 @@ pub struct TerminalState {
     reported_resume_revision: u64,
     pub terminal_title: Option<String>,
     pub manual_label: Option<String>,
-    /// Hidden from socket API callers: screen reads and input are refused and
-    /// metadata is reduced to identity. Set from the UI or the API; only the UI
-    /// can clear it. See `App::private_pane_refusal`.
-    pub private: bool,
+    /// What socket API callers may do with this pane (`rwx`, `r--`, `---`, ...).
+    /// The UI may set any mode; API callers may only remove bits. See
+    /// `App::pane_access_refusal`.
+    pub access: crate::pane_access::PaneAccess,
+    /// Who chose `access`: the configured default, a program or agent over the
+    /// API, or the user from the UI. Programs never override a user's choice.
+    pub access_source: crate::pane_access::PaneAccessSource,
     pub agent_name: Option<String>,
     agent_name_owner: Option<AgentNameOwner>,
     managed_agent: Option<ManagedAgent>,
@@ -185,7 +188,8 @@ impl TerminalState {
             reported_resume_revision: 0,
             terminal_title: None,
             manual_label: None,
-            private: false,
+            access: crate::pane_access::PaneAccess::FULL,
+            access_source: crate::pane_access::PaneAccessSource::Default,
             agent_name: None,
             agent_name_owner: None,
             managed_agent: None,
@@ -2112,13 +2116,18 @@ impl TerminalState {
         self.manual_label = None;
     }
 
-    /// Hide or show this pane's screen and input for socket API callers.
-    /// Returns true when the flag changed.
-    pub fn set_private(&mut self, private: bool) -> bool {
-        if self.private == private {
+    /// Set what socket API callers may do with this pane, recording who decided.
+    /// Returns true when the mode changed; the source is always recorded.
+    pub fn set_access(
+        &mut self,
+        access: crate::pane_access::PaneAccess,
+        source: crate::pane_access::PaneAccessSource,
+    ) -> bool {
+        self.access_source = source;
+        if self.access == access {
             return false;
         }
-        self.private = private;
+        self.access = access;
         self.revision = self.revision.wrapping_add(1);
         true
     }

@@ -519,7 +519,8 @@ pub(super) enum ClientContextMenuAction {
     NewTab,
     RenamePane,
     ClearPaneName,
-    TogglePanePrivacy,
+    ChooseAgentAccess,
+    SetPaneAccess(crate::pane_access::PaneAccess),
     SwapWithFocusedPane,
     SplitRight,
     SplitDown,
@@ -547,8 +548,13 @@ pub(super) enum ClientContextMenuTarget {
         workspace_id: String,
         source_pane_id: Option<String>,
         has_manual_label: bool,
-        private: bool,
+        access: crate::pane_access::PaneAccess,
         right_click_passthrough: bool,
+    },
+    /// The second-level menu that picks a pane's agent access mode.
+    PaneAccess {
+        pane_id: String,
+        current: crate::pane_access::PaneAccess,
     },
 }
 

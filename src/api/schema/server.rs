@@ -55,4 +55,7 @@ pub struct ServerCapabilities {
     /// Supports connection-scoped `server.ssh_agent.register` on the local JSON API.
     #[serde(default)]
     pub ssh_agent_registration: bool,
+    /// Panes carry an `access` mode (`rwx`, `r--`, `---`) and `pane.access.set` exists.
+    #[serde(default)]
+    pub pane_access_modes: bool,
 }

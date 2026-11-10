@@ -34,6 +34,7 @@ mod logging;
 mod metadata_tokens;
 mod noninteractive_process;
 mod pane;
+mod pane_access;
 use ghostty_vt::pane_graphics_files;
 mod persist;
 mod platform;
@@ -173,7 +174,7 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # switch_workspace = ""   # optional indexed binding, e.g. "prefix+shift+1..9"
 # close_tab = "prefix+shift+x"
 # rename_pane = "prefix+shift+p"
-# toggle_pane_privacy = "prefix+shift+i"  # hide the focused pane from agents (socket API), or show it again
+# cycle_pane_access = "prefix+shift+i"  # cycle the focused pane's agent access: rwx -> r-- -> --- -> rwx
 # edit_scrollback = "prefix+e"
 # clear_pane = ""                  # unbound; e.g. "prefix+ctrl+k"
 # focus_pane_left = "prefix+h"
@@ -401,6 +402,15 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # resume_agents_on_restore = true
 # Milliseconds between automatic agent restores; 0 starts them without spacing.
 # startup_per_agent_delay_ms = 100
+
+[agents]
+# What agents and scripts on the socket API may do with a new pane, like Unix
+# permissions: r read the screen, w send raw input, x run commands or prompt the
+# agent in it. The UI can change any pane (pane menu or cycle_pane_access).
+# default_pane_access = "rwx"
+# Let a program or agent tighten its own pane over the API (`herdr pane access
+# <id> ---`). Widening is only ever accepted from the UI.
+# honor_program_access_requests = true
 
 [remote]
 # Whether herdr manages the ssh config used for `herdr --remote`.

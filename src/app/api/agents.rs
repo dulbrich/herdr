@@ -7,6 +7,7 @@ use crate::api::schema::{
     PaneReadResult, ResponseResult,
 };
 use crate::app::App;
+use crate::pane_access::PaneAccessBit;
 
 use super::responses::{encode_error, encode_error_body, encode_success};
 
@@ -81,13 +82,20 @@ impl App {
             Err(err) => return encode_error_body(id, self.agent_rename_error_body(err)),
         };
 
-        encode_success(id, ResponseResult::AgentInfo { agent })
+        encode_success(
+            id,
+            ResponseResult::AgentInfo {
+                agent: self.redact_agent_info_for_api(agent),
+            },
+        )
     }
 
     pub(super) fn handle_agent_start(&mut self, id: String, params: AgentStartParams) -> String {
-        // Starting an agent types a command into the pane, so a private pane refuses it.
+        // Starting an agent types a command into the pane: execution, so it needs x.
         if let Some((ws_idx, pane_id)) = self.parse_current_public_pane_id(&params.pane_id) {
-            if let Some(refusal) = self.private_pane_refusal(&id, ws_idx, pane_id) {
+            if let Some(refusal) =
+                self.pane_access_refusal(&id, ws_idx, pane_id, PaneAccessBit::Exec)
+            {
                 return refusal;
             }
         }
@@ -173,7 +181,9 @@ impl App {
             Ok(resolved) => resolved,
             Err(err) => return Err(encode_error_body(id, self.agent_target_error_body(err))),
         };
-        if let Some(refusal) = self.private_pane_refusal(&id, resolved.ws_idx, resolved.pane_id) {
+        if let Some(refusal) =
+            self.pane_access_refusal(&id, resolved.ws_idx, resolved.pane_id, PaneAccessBit::Exec)
+        {
             return Err(refusal);
         }
         let Some(terminal_id) = self
@@ -300,7 +310,9 @@ impl App {
             Ok(resolved) => resolved,
             Err(err) => return encode_error_body(id, self.agent_target_error_body(err)),
         };
-        if let Some(refusal) = self.private_pane_refusal(&id, resolved.ws_idx, resolved.pane_id) {
+        if let Some(refusal) =
+            self.pane_access_refusal(&id, resolved.ws_idx, resolved.pane_id, PaneAccessBit::Read)
+        {
             return refusal;
         }
         let Some((pane, workspace_id)) = self.lookup_runtime(resolved.ws_idx, resolved.pane_id)
@@ -340,7 +352,9 @@ impl App {
             Ok(resolved) => resolved,
             Err(err) => return encode_error_body(id, self.agent_target_error_body(err)),
         };
-        if let Some(refusal) = self.private_pane_refusal(&id, resolved.ws_idx, resolved.pane_id) {
+        if let Some(refusal) =
+            self.pane_access_refusal(&id, resolved.ws_idx, resolved.pane_id, PaneAccessBit::Read)
+        {
             return refusal;
         }
         let Some((pane, _workspace_id)) = self.lookup_runtime(resolved.ws_idx, resolved.pane_id)
@@ -418,7 +432,9 @@ impl App {
             Ok(resolved) => resolved,
             Err(err) => return encode_error_body(id, self.agent_target_error_body(err)),
         };
-        if let Some(refusal) = self.private_pane_refusal(&id, resolved.ws_idx, resolved.pane_id) {
+        if let Some(refusal) =
+            self.pane_access_refusal(&id, resolved.ws_idx, resolved.pane_id, PaneAccessBit::Write)
+        {
             return refusal;
         }
         let Some(terminal_id) = self

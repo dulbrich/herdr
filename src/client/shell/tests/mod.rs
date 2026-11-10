@@ -52,7 +52,7 @@ pub(super) fn snapshot() -> ClientShellSnapshot {
             agent_status: AgentStatus::Idle,
         }],
         panes: vec![ClientShellPane {
-            private: false,
+            access: Default::default(),
             pane_id: "pane_1".into(),
             workspace_id: "ws_1".into(),
             tab_id: "tab_1".into(),
@@ -177,7 +177,7 @@ fn pane_scroll_result(
 ) -> crate::api::schema::ResponseResult {
     crate::api::schema::ResponseResult::PaneInfo {
         pane: crate::api::schema::PaneInfo {
-            private: false,
+            access: Default::default(),
             pane_id: "pane_1".into(),
             terminal_id: "terminal_1".into(),
             workspace_id: "ws_1".into(),

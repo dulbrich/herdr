@@ -3,7 +3,7 @@
 ## Unreleased
 
 ### Added
-- Panes can be made private. A private pane stays in `pane list`, `pane get`, and `agent list` with only its identity and label, and every API method that reads its screen or sends it input returns `pane_private`, including `agent prompt`, `agent wait`, and `agent read`. Any client can hide a pane with `herdr pane private <pane_id>`, the pane menu, or `prefix+shift+i`; only the Herdr UI can show it again, so an agent cannot undo it. The border and sidebar say `private`, and the setting survives a restore.
+- Panes have an agent access mode, written like Unix permissions: `r` lets agents read the screen and metadata, `w` lets them send raw input, `x` lets them run commands or prompt the agent (`pane run`, `agent prompt`, `agent start`). Anything the mode does not allow returns `pane_access_denied`; without `r` the pane is listed with only its ids and label. Set it with `herdr pane access <pane_id> r--`, the pane menu's "Agent access...", or `prefix+shift+i` (rwx, r--, ---). Any client can tighten a pane, so a tool can hide its own pane at start-up; only the Herdr UI can widen it, and a mode the user chose there is not changed by programs. New panes start with `[agents] default_pane_access` (default `rwx`); `honor_program_access_requests = false` blocks all socket changes. `pane run` is now the method `pane.run` and needs `x`; `pane.send_input` is unchanged. The border and sidebar show the mode, and it survives a restore.
 
 ## [0.9.5] - 2026-10-14
 

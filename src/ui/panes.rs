@@ -745,13 +745,15 @@ fn render_pane_border_titles(
             .pane_state(info.id)
             .and_then(|pane| app.terminals.get(&pane.attached_terminal_id))
             .and_then(|terminal| {
-                // A private pane is marked on its border so the user can see which
-                // panes agents cannot read.
+                // A pane with reduced agent access shows its mode on the border so the
+                // user can see what agents may do with it. The default mode shows nothing.
                 let label = terminal.border_label(app.show_agent_labels_on_pane_borders);
-                match (label, terminal.private) {
-                    (Some(label), true) => Some(format!("{label} \u{00b7} private")),
-                    (None, true) => Some("private".to_string()),
-                    (label, false) => label,
+                match (label, terminal.access.is_full()) {
+                    (Some(label), false) => {
+                        Some(format!("{label} \u{00b7} {}", terminal.access.as_str()))
+                    }
+                    (None, false) => Some(terminal.access.as_str().to_string()),
+                    (label, true) => label,
                 }
             })
             .and_then(|label| pane_border_title(&label, info.rect.width, info.is_focused))

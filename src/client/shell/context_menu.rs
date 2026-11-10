@@ -1,3 +1,27 @@
+/// The access picker's rows: mode, label when it is the current mode, label otherwise.
+const ACCESS_PRESETS: [(crate::pane_access::PaneAccess, &str, &str); 4] = [
+    (
+        crate::pane_access::PaneAccess::FULL,
+        "* rwx  agents may read, type, and run",
+        "  rwx  agents may read, type, and run",
+    ),
+    (
+        crate::pane_access::PaneAccess::PROMPT_ONLY,
+        "* r-x  agents may read and prompt, not type",
+        "  r-x  agents may read and prompt, not type",
+    ),
+    (
+        crate::pane_access::PaneAccess::READ_ONLY,
+        "* r--  agents may only watch",
+        "  r--  agents may only watch",
+    ),
+    (
+        crate::pane_access::PaneAccess::NONE,
+        "* ---  private: agents only know it exists",
+        "  ---  private: agents only know it exists",
+    ),
+];
+
 use super::*;
 
 impl ClientContextMenuOverlay {
@@ -50,10 +74,18 @@ impl ClientContextMenuOverlay {
                 item("Rename", Action::Rename),
                 item("Close", Action::Close),
             ],
+            ClientContextMenuTarget::PaneAccess { current, .. } => ACCESS_PRESETS
+                .iter()
+                .map(|(mode, chosen, other)| {
+                    item(
+                        if mode == current { *chosen } else { *other },
+                        Action::SetPaneAccess(*mode),
+                    )
+                })
+                .collect(),
             ClientContextMenuTarget::Pane {
                 source_pane_id,
                 has_manual_label,
-                private,
                 right_click_passthrough,
                 ..
             } => {
@@ -61,14 +93,7 @@ impl ClientContextMenuOverlay {
                 if *has_manual_label {
                     items.push(item("Clear pane name", Action::ClearPaneName));
                 }
-                items.push(item(
-                    if *private {
-                        "Show pane to agents"
-                    } else {
-                        "Hide pane from agents"
-                    },
-                    Action::TogglePanePrivacy,
-                ));
+                items.push(item("Agent access...", Action::ChooseAgentAccess));
                 if source_pane_id.is_some() {
                     items.push(item("Swap with focused pane", Action::SwapWithFocusedPane));
                 }
@@ -168,7 +193,7 @@ impl ClientShellState {
                 workspace_id: pane.workspace_id.clone(),
                 source_pane_id,
                 has_manual_label: pane.label.is_some(),
-                private: pane.private,
+                access: pane.access,
                 right_click_passthrough: pane.right_click_passthrough,
             },
             x,
@@ -201,7 +226,40 @@ impl ClientShellState {
             outcome.repaint = true;
             return;
         };
+        // The access picker is a second level of the same menu, at the same spot.
+        if action == ClientContextMenuAction::ChooseAgentAccess {
+            if let ClientContextMenuTarget::Pane {
+                pane_id, access, ..
+            } = menu.target
+            {
+                let highlighted = ACCESS_PRESETS
+                    .iter()
+                    .position(|(mode, ..)| *mode == access)
+                    .unwrap_or(0);
+                self.overlay = Some(ClientShellOverlay::ContextMenu(ClientContextMenuOverlay {
+                    target: ClientContextMenuTarget::PaneAccess {
+                        pane_id,
+                        current: access,
+                    },
+                    x: menu.x,
+                    y: menu.y,
+                    highlighted,
+                }));
+                outcome.repaint = true;
+            }
+            return;
+        }
         match menu.target {
+            ClientContextMenuTarget::PaneAccess { pane_id, .. } => {
+                if let ClientContextMenuAction::SetPaneAccess(access) = action {
+                    self.push_endpoint_method(
+                        crate::api::schema::Method::PaneAccessSet(
+                            crate::api::schema::PaneAccessSetParams { pane_id, access },
+                        ),
+                        outcome,
+                    );
+                }
+            }
             ClientContextMenuTarget::Workspace {
                 workspace_id,
                 close_group,
@@ -375,9 +433,8 @@ impl ClientShellState {
         outcome: &mut ClientShellInput,
     ) {
         use crate::api::schema::{
-            Method, PaneInputSetParams, PaneRenameParams, PaneRightClickTarget,
-            PaneSetPrivateParams, PaneSplitParams, PaneSwapParams, PaneTarget, PaneZoomMode,
-            PaneZoomParams, SplitDirection,
+            Method, PaneInputSetParams, PaneRenameParams, PaneRightClickTarget, PaneSplitParams,
+            PaneSwapParams, PaneTarget, PaneZoomMode, PaneZoomParams, SplitDirection,
         };
 
         match action {
@@ -447,20 +504,9 @@ impl ClientShellState {
                 }),
                 outcome,
             ),
-            ClientContextMenuAction::TogglePanePrivacy => {
-                let private = self
-                    .snapshot
-                    .as_deref()
-                    .and_then(|snapshot| snapshot.panes.iter().find(|pane| pane.pane_id == pane_id))
-                    .is_some_and(|pane| pane.private);
-                self.push_endpoint_method(
-                    Method::PaneSetPrivate(PaneSetPrivateParams {
-                        pane_id,
-                        private: !private,
-                    }),
-                    outcome,
-                )
-            }
+            // Both are handled before the pane menu dispatch; they never reach here.
+            ClientContextMenuAction::ChooseAgentAccess
+            | ClientContextMenuAction::SetPaneAccess(_) => {}
             ClientContextMenuAction::ToggleRightClickPassthrough => self.push_endpoint_method(
                 Method::PaneInputSet(PaneInputSetParams {
                     pane_id,

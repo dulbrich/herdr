@@ -94,7 +94,7 @@ impl App {
         match result {
             Ok((tab_idx, terminal, runtime)) => {
                 self.terminal_runtimes.insert(terminal.id.clone(), runtime);
-                self.state.terminals.insert(terminal.id.clone(), terminal);
+                self.state.adopt_terminal(terminal);
                 self.state.remove_alias_shadowed_by_new_pane(
                     self.state.workspaces[ws_idx].tabs[tab_idx].root_pane,
                 );

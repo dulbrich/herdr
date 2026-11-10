@@ -698,6 +698,12 @@
           "description": "Rename the focused pane."
         },
         {
+          "key": "keys.cycle_pane_access",
+          "type": "keybinding",
+          "default": "\"prefix+shift+i\"",
+          "description": "Cycle the focused pane's agent access: rwx, then r-- (agents may only watch), then --- (private), then rwx again."
+        },
+        {
           "key": "keys.edit_scrollback",
           "type": "keybinding",
           "default": "\"prefix+e\"",
@@ -1423,6 +1429,24 @@
             "on",
             "off"
           ]
+        }
+      ]
+    },
+    {
+      "id": "agents",
+      "title": "Agents",
+      "keys": [
+        {
+          "key": "agents.default_pane_access",
+          "type": "string",
+          "default": "\"rwx\"",
+          "description": "What agents and scripts on the socket API may do with a new pane, like Unix permissions: r read the screen and metadata, w send raw input, x run commands or prompt the agent. Any client may tighten a pane; only the Herdr UI widens it."
+        },
+        {
+          "key": "agents.honor_program_access_requests",
+          "type": "boolean",
+          "default": "true",
+          "description": "Let a program or agent tighten a pane's access over the socket API, for example a tool that hides its own pane at start-up. When false, access changes only from the Herdr UI."
         }
       ]
     },

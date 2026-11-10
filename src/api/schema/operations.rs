@@ -192,7 +192,7 @@ mod tests {
             "pane.focus",
             "pane.input.set",
             "pane.rename",
-            "pane.set_private",
+            "pane.access.set",
             "pane.report_agent",
             "pane.report_agent_session",
             "pane.report_metadata",

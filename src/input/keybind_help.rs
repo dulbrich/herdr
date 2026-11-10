@@ -171,8 +171,8 @@ pub(crate) fn keybind_help_groups(
                 entry(binding_label(&keybinds.close_pane), "close pane"),
                 entry(binding_label(&keybinds.rename_pane), "rename pane"),
                 entry(
-                    binding_label(&keybinds.toggle_pane_privacy),
-                    "hide/show pane for agents",
+                    binding_label(&keybinds.cycle_pane_access),
+                    "cycle agent access (rwx, r--, ---)",
                 ),
                 entry(binding_label(&keybinds.edit_scrollback), "edit scrollback"),
                 entry(binding_label(&keybinds.clear_pane), "clear pane"),

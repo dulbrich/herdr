@@ -1060,9 +1060,10 @@ pub struct ClientShellPane {
     pub workspace_id: String,
     pub tab_id: String,
     pub label: Option<String>,
-    /// Hidden from socket API callers; the UI still shows it and may clear it.
+    /// What socket API callers may do with the pane (`rwx`, `r--`, `---`, ...).
+    /// A server without access modes leaves it at `rwx`.
     #[serde(default)]
-    pub private: bool,
+    pub access: crate::pane_access::PaneAccess,
     pub cwd: Option<String>,
     pub foreground_cwd: Option<String>,
     pub focused: bool,
@@ -2845,7 +2846,7 @@ mod tests {
                 agent_status: crate::api::schema::AgentStatus::Idle,
             }],
             panes: vec![ClientShellPane {
-                private: false,
+                access: Default::default(),
                 pane_id: "w1:p1".into(),
                 workspace_id: "w1".into(),
                 tab_id: "w1:t1".into(),

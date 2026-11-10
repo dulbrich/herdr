@@ -796,6 +796,9 @@ impl App {
     }
 
     pub(super) fn emit_event(&mut self, event: crate::api::schema::EventEnvelope) {
+        let Some(event) = self.redact_event_for_api(event) else {
+            return;
+        };
         self.run_plugin_event_hooks(&event);
         self.event_hub.push(event);
     }
@@ -1188,9 +1191,10 @@ impl App {
                 return self.handle_pane_link_activate(request.id, params);
             }
             Method::PaneRename(params) => return self.handle_pane_rename(request.id, params),
-            Method::PaneSetPrivate(params) => {
-                return self.handle_pane_set_private(request.id, params);
+            Method::PaneAccessSet(params) => {
+                return self.handle_pane_access_set(request.id, params);
             }
+            Method::PaneRun(params) => return self.handle_pane_run(request.id, params),
             Method::PaneRead(params) => return self.handle_pane_read(request.id, params),
             Method::PaneReportAgent(params) => {
                 return self.handle_pane_report_agent(request.id, params);

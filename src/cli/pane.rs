@@ -313,11 +313,11 @@ mod tests {
                 json!({"pane_id": "pane", "source": "recent", "format": "text", "strip_ansi": true}),
             ),
             (
-                "private",
-                vec!["pane", "--off"],
-                "cli:pane:private",
-                "pane.set_private",
-                json!({"pane_id": "pane", "private": false}),
+                "access",
+                vec!["pane", "r--"],
+                "cli:pane:access",
+                "pane.access.set",
+                json!({"pane_id": "pane", "access": "r--"}),
             ),
             (
                 "rename",
@@ -386,8 +386,8 @@ mod tests {
                 "run",
                 vec!["pane", ""],
                 "cli:request",
-                "pane.send_input",
-                json!({"pane_id": "pane", "keys": ["Enter"]}),
+                "pane.run",
+                json!({"pane_id": "pane", "command": ""}),
             ),
             (
                 "report-agent",
@@ -909,13 +909,16 @@ mod tests {
 
     #[test]
     fn pane_projection_atomic_run_joined_text_and_raw_keys() {
-        for (name, field) in [("run", "text"), ("send-text", "text"), ("rename", "label")] {
+        for (name, field) in [
+            ("run", "command"),
+            ("send-text", "text"),
+            ("rename", "label"),
+        ] {
             let parsed = request(name, &["pane", "a", "--literal", "b"]).unwrap();
             let json = serde_json::to_value(parsed).unwrap();
             assert_eq!(json["params"][field], "a --literal b");
             if name == "run" {
-                assert_eq!(json["params"]["keys"], serde_json::json!(["Enter"]));
-                assert_eq!(json["method"], "pane.send_input");
+                assert_eq!(json["method"], "pane.run");
                 assert_eq!(json["id"], "cli:request");
             }
         }
@@ -1023,7 +1026,7 @@ mod tests {
             "send-keys",
             "run",
             "rename",
-            "private",
+            "access",
             "input",
             "move",
             "report-agent",

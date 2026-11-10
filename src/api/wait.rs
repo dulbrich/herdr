@@ -635,17 +635,14 @@ fn agent_from_response(
                 message: "failed to decode agent result".into(),
             },
         })?;
-    // The app already reduced a private pane's agent to identity; waiting on it or
-    // prompting it would only ever time out, so refuse up front.
-    if agent.private {
+    // Without r the app already reduced this agent to identity; waiting on it would
+    // only ever time out, and prompting it needs its state, so refuse up front.
+    if !agent.access.can_read() {
         return Err(ErrorResponse {
             id: request_id.into(),
             error: ErrorBody {
-                code: "pane_private".into(),
-                message: format!(
-                    "{} is private: its state and input are not available through the API",
-                    agent.pane_id
-                ),
+                code: "pane_access_denied".into(),
+                message: format!("{} is {}: waiting needs r", agent.pane_id, agent.access),
             },
         });
     }

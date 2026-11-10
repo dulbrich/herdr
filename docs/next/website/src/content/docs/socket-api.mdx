@@ -103,7 +103,7 @@ Raw socket method names use dot notation:
 | Workspace | `workspace.create`, `workspace.list`, `workspace.get`, `workspace.focus`, `workspace.rename`, `workspace.move`, `workspace.move_block`, `workspace.report_metadata`, `workspace.close` |
 | Worktree | `worktree.list`, `worktree.create`, `worktree.open`, `worktree.remove` |
 | Tab | `tab.create`, `tab.list`, `tab.get`, `tab.focus`, `tab.rename`, `tab.move`, `tab.close` |
-| Pane | `pane.split`, `pane.swap`, `pane.move`, `pane.zoom`, `pane.layout`, `pane.process_info`, `pane.neighbor`, `pane.edges`, `pane.focus_direction`, `pane.resize`, `pane.list`, `pane.current`, `pane.get`, `pane.rename`, `pane.set_private`, `pane.send_text`, `pane.send_keys`, `pane.send_input`, `pane.read`, `pane.report_agent`, `pane.report_agent_session`, `pane.report_metadata`, `pane.clear_agent_authority`, `pane.release_agent`, `pane.close`, `pane.wait_for_output` |
+| Pane | `pane.split`, `pane.swap`, `pane.move`, `pane.zoom`, `pane.layout`, `pane.process_info`, `pane.neighbor`, `pane.edges`, `pane.focus_direction`, `pane.resize`, `pane.list`, `pane.current`, `pane.get`, `pane.rename`, `pane.access.set`, `pane.run`, `pane.send_text`, `pane.send_keys`, `pane.send_input`, `pane.read`, `pane.report_agent`, `pane.report_agent_session`, `pane.report_metadata`, `pane.clear_agent_authority`, `pane.release_agent`, `pane.close`, `pane.wait_for_output` |
 | Popup | `popup.close` |
 | Layout | `layout.export`, `layout.apply`, `layout.set_split_ratio` |
 | Agent | `agent.list`, `agent.get`, `agent.read`, `agent.explain`, `agent.send_keys`, `agent.prompt`, `agent.wait`, `agent.rename`, `agent.focus`, `agent.start`, `agent.view.set`, `agent.view.clear` |
@@ -840,29 +840,37 @@ Worktree event subscriptions include `worktree.created`, `worktree.opened`, and 
 
 Use `events.subscribe` for lifecycle events. Dedicated wait helpers are documented separately when a one-shot wait is supported.
 
-## Private panes
+## Agent access modes
 
-`pane.set_private` with `{"pane_id": "w1:p2", "private": true}` hides a pane from this API.
-Any client may do that. `"private": false` is accepted only from an attached Herdr UI
-client (the pane menu or the `toggle_pane_privacy` key); over the socket it returns
-`pane_private`, so an agent cannot lift privacy a user asked for.
+Every pane carries an `access` mode, written like Unix permissions, that says what this API may do
+with it. `rwx` is the default and allows everything; `---` hides the pane. The server advertises
+the feature with the `pane_access_modes` capability.
 
-While a pane is private:
+| Bit | Allows | Methods that need it |
+|---|---|---|
+| `r` | read the screen and see full metadata | `pane.read`, `pane.wait_for_output`, `pane.selection.read`, `pane.copy_motion`, `pane.copy_search`, `pane.process_info`, `pane.link.resolve`, `agent.read`, `agent.explain`, `agent.wait` |
+| `w` | deliver raw input | `pane.send_text`, `pane.send_keys`, `pane.send_input`, `pane.clear`, `pane.scroll`, `pane.edit_scrollback`, `agent.send_keys` |
+| `x` | execute through a structured operation | `pane.run`, `agent.prompt`, `agent.start`, `pane.link.activate` |
 
-- `pane.read`, `pane.send_text`, `pane.send_keys`, `pane.send_input`, `pane.wait_for_output`,
-  `pane.process_info`, `pane.scroll`, `pane.clear`, `pane.edit_scrollback`, the copy-mode
-  methods, `agent.read`, `agent.send_keys`, `agent.prompt`, `agent.wait`, and `agent.explain`
-  return the error code `pane_private` without touching the pane.
-- `pane.list`, `pane.get`, `pane.current`, `agent.list`, `agent.get`, and `session.snapshot`
-  still include the pane, with `"private": true` and only identity fields: pane, terminal,
-  workspace and tab ids, focus, and the user's label. Working directories, titles, agent
-  kind and status, metadata tokens, agent sessions, and scroll state are omitted.
-- Layout methods such as `pane.split`, `pane.move`, `pane.swap`, `pane.resize`, `pane.zoom`,
-  `pane.focus`, and `pane.close` keep working, and integrations inside the pane may still
-  report agent state with `pane.report_agent`.
+A refused call returns the error code `pane_access_denied` with a message naming the pane, its
+mode, and the bit that was needed, before the pane is touched. Without `r`, `pane.list`,
+`pane.get`, `pane.current`, `agent.list`, `agent.get`, `session.snapshot`, and pane events carry
+only identity fields (pane, terminal, workspace and tab ids, focus, and the user's label), and
+`pane.agent_status_changed`, `pane.agent_detected`, and `pane.output_changed` events are not
+sent for that pane. Layout and lifecycle methods (`pane.split`, `pane.move`, `pane.swap`,
+`pane.resize`, `pane.zoom`, `pane.focus`, `pane.rename`, `pane.close`, `pane.input.set`) work in
+every mode, and integrations inside the pane may still report state with `pane.report_*`.
 
-The flag is part of session state and survives a restore. The UI shows `private` on the
-pane border and in the sidebar.
+`pane.access.set` takes `{"pane_id": "w1:p2", "access": "r--"}`. Over the socket it may only
+remove bits, and not from a pane the user set explicitly; anything else is `pane_access_denied`.
+That is how a program declares its preferred mode: it tightens its own pane at start-up. An
+attached Herdr UI client may set any mode; a non-default choice there is user-set until the user
+picks the configured default again. `pane.run` takes `{"pane_id", "command"}` and types the
+command followed by Enter; `pane.send_input` keeps its shape and stays a `w` operation.
+
+Config: `[agents] default_pane_access = "rwx"` seeds new panes and
+`honor_program_access_requests = false` blocks every socket change. The mode is part of session
+state and survives a restore.
 
 ## Reading panes
 

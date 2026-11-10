@@ -292,21 +292,21 @@ pub(super) fn agent_row(
         .agent
         .as_deref()
         .and_then(crate::detect::parse_agent_label);
-    // A private pane says so where its title goes, so the user can tell at a glance
-    // which agents cannot be reached through the API.
-    let private = pane.is_some_and(|pane| pane.private);
+    // A pane with reduced agent access says so where its title goes, so the user can
+    // tell at a glance what agents may do with it.
+    let access = pane.map_or(crate::pane_access::PaneAccess::FULL, |pane| pane.access);
     let pane_title = agent
         .title
         .as_deref()
         .or_else(|| pane.and_then(|pane| pane.label.as_deref()))
         .map(|title| {
-            if private {
-                format!("{title} [private]")
-            } else {
+            if access.is_full() {
                 title.to_string()
+            } else {
+                format!("{title} [{}]", access.as_str())
             }
         })
-        .or_else(|| private.then(|| "private".to_string()));
+        .or_else(|| (!access.is_full()).then(|| access.as_str().to_string()));
     let rows = crate::ui::sidebar_agent_rows(
         &config.agents,
         crate::ui::AgentTokenContext {

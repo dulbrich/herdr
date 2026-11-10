@@ -4,9 +4,9 @@ use clap::{ArgMatches, Command};
 
 use crate::api::schema::panes::*;
 use crate::api::schema::{
-    Method, OutputMatch, PaneAgentState, PaneDirection, PaneSetPrivateProjection, PaneTarget,
-    PaneWaitForOutputParams, ReadFormat, ReadSource, Request, SplitDirection, READ_FORMATS,
-    READ_SOURCES,
+    Method, OutputMatch, PaneAccess, PaneAccessSetParams, PaneAgentState, PaneDirection,
+    PaneTarget, PaneWaitForOutputParams, ReadFormat, ReadSource, Request, SplitDirection,
+    READ_FORMATS, READ_SOURCES,
 };
 pub(crate) use crate::cli::projection::parse_choice;
 use crate::cli::projection::{choices, choices_where, Choice};
@@ -49,6 +49,26 @@ pub(crate) fn pane_id() -> Input<String> {
         Ok(())
     })
     .value_name("PANE_ID")
+}
+
+/// `herdr pane access <pane_id> [MODE]`: with a mode it sets, without it shows the pane.
+pub(crate) struct PaneAccessArgs {
+    pub(crate) pane_id: String,
+    pub(crate) access: Option<PaneAccess>,
+}
+
+crate::cli::projection::cli_projection! {
+    PaneAccessProjection for PaneAccessArgs {
+        pane_id => Field::new(String::new()).input(pane_id()),
+        access => Field::new(None).input(
+            Input::positional("access", 1, |slot, value| {
+                *slot = Some(value.parse::<PaneAccess>().map_err(ParseError::Usage)?);
+                Ok(())
+            })
+            .value_name("MODE")
+            .configure(|arg| arg.required(false)),
+        ),
+    }
 }
 
 pub(crate) fn text(name: &'static str, value: &'static str) -> Input<String> {
@@ -596,14 +616,25 @@ pub(super) const LEAVES: &[Leaf] = &[
         PaneRenameProjection,
         PaneRename
     ),
-    leaf!(
-        "private",
-        "Hide a pane from the API; --off is honored only from the Herdr UI",
-        "cli:pane:private",
-        Json,
-        PaneSetPrivateProjection,
-        PaneSetPrivate
-    ),
+    Leaf {
+        name: "access",
+        about: "Show or set what agents may do with a pane: rwx, r-x, r--, --- (widening needs the Herdr UI)",
+        id: "cli:pane:access",
+        output: Output::Json,
+        arguments: PaneAccessProjection::arguments,
+        method: |matches| {
+            let args = PaneAccessProjection::from_matches(matches)?;
+            Ok(match args.access {
+                Some(access) => Method::PaneAccessSet(PaneAccessSetParams {
+                    pane_id: args.pane_id,
+                    access,
+                }),
+                None => Method::PaneGet(PaneTarget {
+                    pane_id: args.pane_id,
+                }),
+            })
+        },
+    },
     Leaf {
         name: "input",
         about: "Set pane input routing",
@@ -688,11 +719,11 @@ pub(super) const LEAVES: &[Leaf] = &[
     ),
     leaf!(
         "run",
-        "Run a command in a pane",
+        "Run a command in a pane (needs x access)",
         "cli:request",
         Quiet,
         PaneRunProjection,
-        PaneSendInput
+        PaneRun
     ),
     Leaf {
         name: "report-agent",

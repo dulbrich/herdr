@@ -450,7 +450,8 @@ fn unavailable_restored_terminal(
     terminal.restore_error = Some(reason);
     if let Some(pane) = pane {
         terminal.manual_label = pane.label.clone();
-        terminal.private = pane.private;
+        let (access, source) = pane.restored_access();
+        terminal.set_access(access, source);
         terminal.launch_argv = pane.launch_argv.clone();
         if let Some(session) = restored_terminal_agent_session(pane.agent_session.as_ref(), false) {
             terminal.set_persisted_agent_session(session);
@@ -534,7 +535,8 @@ fn restore_tab(
         }
 
         let saved_label = saved_pane.and_then(|p| p.label.clone());
-        let saved_private = saved_pane.is_some_and(|p| p.private);
+        let (saved_access, saved_access_source) =
+            saved_pane.map_or(Default::default(), |p| p.restored_access());
         let saved_agent_name = saved_pane.and_then(|p| p.agent_name.clone());
         let saved_managed_agent = saved_pane
             .and_then(|pane| pane.managed_agent_kind.as_deref())
@@ -598,7 +600,7 @@ fn restore_tab(
             if let Some(label) = saved_label {
                 terminal.set_manual_label(label);
             }
-            terminal.private = saved_private;
+            terminal.set_access(saved_access, saved_access_source);
             if let Some(session) = restored_agent_session {
                 terminal.set_persisted_agent_session(session);
             }
@@ -699,7 +701,7 @@ fn restore_tab(
                 if let Some(label) = saved_label {
                     terminal.set_manual_label(label);
                 }
-                terminal.private = saved_private;
+                terminal.set_access(saved_access, saved_access_source);
                 if let Some(session) = restored_agent_session {
                     terminal.set_persisted_agent_session(session);
                 }
@@ -1546,6 +1548,8 @@ mod tests {
                     panes: HashMap::from([(
                         0,
                         super::super::snapshot::PaneSnapshot {
+                            access: Default::default(),
+                            access_source: Default::default(),
                             private: false,
                             cwd,
                             label: Some("reviewer".into()),
@@ -1634,6 +1638,8 @@ mod tests {
                         (
                             10,
                             super::super::snapshot::PaneSnapshot {
+                                access: Default::default(),
+                                access_source: Default::default(),
                                 private: false,
                                 cwd: cwd.clone(),
                                 label: None,
@@ -1647,6 +1653,8 @@ mod tests {
                         (
                             20,
                             super::super::snapshot::PaneSnapshot {
+                                access: Default::default(),
+                                access_source: Default::default(),
                                 private: false,
                                 cwd: cwd.clone(),
                                 label: None,
@@ -1702,6 +1710,8 @@ mod tests {
             (
                 id.parse::<u32>().unwrap(),
                 super::super::snapshot::PaneSnapshot {
+                    access: Default::default(),
+                    access_source: Default::default(),
                     private: false,
                     cwd: cwd.clone(),
                     label: None,
@@ -1714,6 +1724,8 @@ mod tests {
             )
         };
         let final_pane = super::super::snapshot::PaneSnapshot {
+            access: Default::default(),
+            access_source: Default::default(),
             private: false,
             cwd: cwd.clone(),
             label: Some("planner".into()),
@@ -1867,6 +1879,8 @@ mod tests {
                     panes: HashMap::from([(
                         0,
                         super::super::snapshot::PaneSnapshot {
+                            access: Default::default(),
+                            access_source: Default::default(),
                             private: false,
                             cwd,
                             label: None,
@@ -2179,6 +2193,8 @@ mod tests {
         panes.insert(
             0,
             super::super::snapshot::PaneSnapshot {
+                access: Default::default(),
+                access_source: Default::default(),
                 private: false,
                 cwd: cwd.clone(),
                 label: None,

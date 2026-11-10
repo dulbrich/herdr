@@ -862,8 +862,8 @@ impl ClientShellState {
         action: crate::input::KeybindAction,
     ) -> Option<crate::api::schema::Method> {
         use crate::api::schema::{
-            Method, PaneDirection, PaneFocusDirectionParams, PaneResizeParams,
-            PaneSetPrivateParams, PaneSplitParams, PaneSwapParams, PaneTarget, PaneZoomMode,
+            Method, PaneAccess, PaneAccessSetParams, PaneDirection, PaneFocusDirectionParams,
+            PaneResizeParams, PaneSplitParams, PaneSwapParams, PaneTarget, PaneZoomMode,
             PaneZoomParams, SplitDirection, TabCreateParams, TabMoveParams, TabTarget,
             WorkspaceTarget,
         };
@@ -1100,16 +1100,16 @@ impl ClientShellState {
                 pane_id: focused_pane,
                 mode: PaneZoomMode::Toggle,
             })),
-            KeybindAction::TogglePanePrivacy => {
+            KeybindAction::CyclePaneAccess => {
                 let pane_id = focused_pane?;
-                let private = snapshot
+                let access = snapshot
                     .panes
                     .iter()
                     .find(|pane| pane.pane_id == pane_id)
-                    .is_some_and(|pane| pane.private);
-                Some(Method::PaneSetPrivate(PaneSetPrivateParams {
+                    .map_or(PaneAccess::FULL, |pane| pane.access);
+                Some(Method::PaneAccessSet(PaneAccessSetParams {
                     pane_id,
-                    private: !private,
+                    access: access.cycle_next(),
                 }))
             }
             KeybindAction::ClearPane => Some(Method::PaneClear(PaneTarget {

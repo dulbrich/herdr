@@ -757,8 +757,27 @@
           ],
           "type": "string"
         },
+        "PaneAccess": {
+          "description": "Agent access to a pane like Unix permissions: r read the screen and metadata, w send raw input, x run commands or prompt the agent. rwx allows everything, --- hides the pane.",
+          "enum": [
+            "---",
+            "--x",
+            "-w-",
+            "-wx",
+            "r--",
+            "r-x",
+            "rw-",
+            "rwx"
+          ],
+          "type": "string"
+        },
         "PaneInfo": {
           "properties": {
+            "access": {
+              "$ref": "#/schemas/event/$defs/PaneAccess",
+              "default": "rwx",
+              "description": "What socket API callers may do with this pane, like Unix permissions: `r`\nread the screen and metadata, `w` send raw input, `x` run commands or prompt\nthe agent. Without `r` this record carries only identity fields."
+            },
             "agent": {
               "type": [
                 "string",
@@ -807,10 +826,6 @@
             },
             "pane_id": {
               "type": "string"
-            },
-            "private": {
-              "description": "The pane is hidden from socket API callers: `pane.read` and input methods\nreturn `pane_private`, and this record carries only identity fields.",
-              "type": "boolean"
             },
             "restore_error": {
               "type": [
@@ -2432,6 +2447,36 @@
             }
           ]
         },
+        "PaneAccess": {
+          "description": "Agent access to a pane like Unix permissions: r read the screen and metadata, w send raw input, x run commands or prompt the agent. rwx allows everything, --- hides the pane.",
+          "enum": [
+            "---",
+            "--x",
+            "-w-",
+            "-wx",
+            "r--",
+            "r-x",
+            "rw-",
+            "rwx"
+          ],
+          "type": "string"
+        },
+        "PaneAccessSetParams": {
+          "description": "`pane.access.set`: choose what socket API callers may do with a pane. The Herdr\nUI may set any mode; API callers may only remove bits, and not from a pane the\nuser set explicitly. The CLI builds this from `herdr pane access <pane_id> MODE`.",
+          "properties": {
+            "access": {
+              "$ref": "#/schemas/request/$defs/PaneAccess"
+            },
+            "pane_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pane_id",
+            "access"
+          ],
+          "type": "object"
+        },
         "PaneAgentState": {
           "enum": [
             "idle",
@@ -3119,6 +3164,22 @@
           ],
           "type": "string"
         },
+        "PaneRunParams": {
+          "description": "`pane.run`: type a command line and press Enter. The structured way to\nexecute in a pane; needs `x` access.",
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "pane_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pane_id",
+            "command"
+          ],
+          "type": "object"
+        },
         "PaneScrollParams": {
           "properties": {
             "offset_from_bottom": {
@@ -3164,6 +3225,7 @@
           "type": "object"
         },
         "PaneSendInputParams": {
+          "description": "`pane.send_input`: raw text and keys in one submission. Needs `w` access.",
           "properties": {
             "keys": {
               "items": {
@@ -3213,22 +3275,6 @@
           "required": [
             "pane_id",
             "text"
-          ],
-          "type": "object"
-        },
-        "PaneSetPrivateParams": {
-          "description": "`pane.set_private`: hide a pane from socket API callers (`private: true`) or,\nfrom the Herdr UI only, show it again (`private: false`).",
-          "properties": {
-            "pane_id": {
-              "type": "string"
-            },
-            "private": {
-              "default": true,
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "pane_id"
           ],
           "type": "object"
         },
@@ -6336,11 +6382,27 @@
         {
           "properties": {
             "method": {
-              "const": "pane.set_private",
+              "const": "pane.access.set",
               "type": "string"
             },
             "params": {
-              "$ref": "#/schemas/request/$defs/PaneSetPrivateParams"
+              "$ref": "#/schemas/request/$defs/PaneAccessSetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "pane.run",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/PaneRunParams"
             }
           },
           "required": [
@@ -6578,6 +6640,11 @@
       "$defs": {
         "AgentInfo": {
           "properties": {
+            "access": {
+              "$ref": "#/schemas/success_response/$defs/PaneAccess",
+              "default": "rwx",
+              "description": "What socket API callers may do with the agent's pane (`rwx`, `r-x`, `---`,\n...). Without `r` this record carries only identity fields."
+            },
             "agent": {
               "type": [
                 "string",
@@ -6641,10 +6708,6 @@
             },
             "pane_id": {
               "type": "string"
-            },
-            "private": {
-              "description": "The agent's pane is private: reads, input and waits return `pane_private`,\nand this record carries only identity fields.",
-              "type": "boolean"
             },
             "revision": {
               "format": "uint64",
@@ -7824,6 +7887,20 @@
           ],
           "type": "string"
         },
+        "PaneAccess": {
+          "description": "Agent access to a pane like Unix permissions: r read the screen and metadata, w send raw input, x run commands or prompt the agent. rwx allows everything, --- hides the pane.",
+          "enum": [
+            "---",
+            "--x",
+            "-w-",
+            "-wx",
+            "r--",
+            "r-x",
+            "rw-",
+            "rwx"
+          ],
+          "type": "string"
+        },
         "PaneDirection": {
           "enum": [
             "left",
@@ -7907,6 +7984,11 @@
         },
         "PaneInfo": {
           "properties": {
+            "access": {
+              "$ref": "#/schemas/success_response/$defs/PaneAccess",
+              "default": "rwx",
+              "description": "What socket API callers may do with this pane, like Unix permissions: `r`\nread the screen and metadata, `w` send raw input, `x` run commands or prompt\nthe agent. Without `r` this record carries only identity fields."
+            },
             "agent": {
               "type": [
                 "string",
@@ -7955,10 +8037,6 @@
             },
             "pane_id": {
               "type": "string"
-            },
-            "private": {
-              "description": "The pane is hidden from socket API callers: `pane.read` and input methods\nreturn `pane_private`, and this record carries only identity fields.",
-              "type": "boolean"
             },
             "restore_error": {
               "type": [
@@ -10483,6 +10561,11 @@
               "type": "boolean"
             },
             "live_handoff": {
+              "type": "boolean"
+            },
+            "pane_access_modes": {
+              "default": false,
+              "description": "Panes carry an `access` mode (`rwx`, `r--`, `---`) and `pane.access.set` exists.",
               "type": "boolean"
             },
             "ssh_agent_registration": {

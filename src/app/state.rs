@@ -835,6 +835,10 @@ pub struct AppState {
     pub pane_scrollbars: bool,
     pub pane_gaps: bool,
     pub show_agent_labels_on_pane_borders: bool,
+    /// Access mode for panes created from now on (config `agents.default_pane_access`).
+    pub default_pane_access: crate::pane_access::PaneAccess,
+    /// Whether programs and agents may tighten a pane's access over the API.
+    pub honor_program_access_requests: bool,
     pub tab_bar_right: Vec<TabBarStatusSegment>,
     pub tab_bar_right_separator: String,
     /// Expose the focused pane's cursor anchor to the outer terminal even when
@@ -891,6 +895,15 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Register a new terminal, giving it the configured default access unless a
+    /// restore or an explicit choice already decided its mode.
+    pub fn adopt_terminal(&mut self, mut terminal: crate::terminal::TerminalState) {
+        if terminal.access_source == crate::pane_access::PaneAccessSource::Default {
+            terminal.access = self.default_pane_access;
+        }
+        self.terminals.insert(terminal.id.clone(), terminal);
+    }
+
     pub(crate) fn mark_session_dirty(&mut self) {
         self.session_dirty = true;
     }
@@ -1077,6 +1090,8 @@ impl AppState {
             pane_scrollbars: true,
             pane_gaps: false,
             show_agent_labels_on_pane_borders: false,
+            default_pane_access: crate::pane_access::PaneAccess::FULL,
+            honor_program_access_requests: true,
             tab_bar_right: Vec::new(),
             tab_bar_right_separator: " ".into(),
             reveal_hidden_cursor_for_cjk_ime: false,

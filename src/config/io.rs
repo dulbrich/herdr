@@ -6,6 +6,7 @@ use super::{model::LoadedConfig, Config, CONFIG_PATH_ENV_VAR};
 
 const KNOWN_TOP_LEVEL_CONFIG_KEYS: &[&str] = &[
     "advanced",
+    "agents",
     "experimental",
     "keys",
     "onboarding",
@@ -318,6 +319,14 @@ fn load_live_config_from_str(content: &str) -> Result<LoadedConfig, Vec<String>>
         &mut diagnostics,
         &mut invalid_sections,
         |section| config.session = section,
+    );
+    load_live_section(
+        table,
+        "agents",
+        "agents config",
+        &mut diagnostics,
+        &mut invalid_sections,
+        |section| config.agents = section,
     );
     load_live_section(
         table,
@@ -883,6 +892,46 @@ mod tests {
 
         std::env::remove_var(CONFIG_PATH_ENV_VAR);
         let _ = std::fs::remove_dir_all(path);
+    }
+
+    #[test]
+    fn load_live_config_parses_agents_section() {
+        let loaded = load_live_config_from_str(
+            r#"
+[agents]
+default_pane_access = "r--"
+honor_program_access_requests = false
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            loaded.config.agents.default_pane_access,
+            crate::pane_access::PaneAccess::READ_ONLY
+        );
+        assert!(!loaded.config.agents.honor_program_access_requests);
+        assert!(loaded.diagnostics.is_empty());
+        assert!(loaded.invalid_sections.is_empty());
+    }
+
+    #[test]
+    fn load_live_config_rejects_a_malformed_access_mode_and_keeps_defaults() {
+        let loaded = load_live_config_from_str(
+            r#"
+[agents]
+default_pane_access = "rwz"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            loaded.config.agents.default_pane_access,
+            crate::pane_access::PaneAccess::FULL
+        );
+        assert!(
+            loaded.invalid_sections.contains(&"agents".to_string())
+                || !loaded.diagnostics.is_empty()
+        );
     }
 
     #[test]

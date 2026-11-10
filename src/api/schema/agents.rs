@@ -209,10 +209,10 @@ cli_params! {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AgentInfo {
     pub terminal_id: String,
-    /// The agent's pane is private: reads, input and waits return `pane_private`,
-    /// and this record carries only identity fields.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub private: bool,
+    /// What socket API callers may do with the agent's pane (`rwx`, `r-x`, `---`,
+    /// ...). Without `r` this record carries only identity fields.
+    #[serde(default)]
+    pub access: crate::pane_access::PaneAccess,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -346,7 +346,7 @@ impl App {
             .insert(terminal_id.clone(), new_pane.runtime);
         self.state
             .remove_alias_shadowed_by_new_pane(new_pane.pane_id);
-        self.state.terminals.insert(terminal_id, new_pane.terminal);
+        self.state.adopt_terminal(new_pane.terminal);
 
         if let Some(public_pane_id) = self.public_pane_id(ws_idx, pane_id) {
             self.state.toast = Some(crate::app::state::ToastNotification {

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cli::pane::bindings as binding;
 use crate::cli::projection::{Field, Input};
+use crate::pane_access::PaneAccess;
 
 use super::agents::AgentSessionInfo;
 use super::common::{AgentStatus, PaneAgentState, ReadFormat, ReadSource, SplitDirection};
@@ -356,17 +357,13 @@ crate::cli::projection::cli_params! {
     }
 }
 
-crate::cli::projection::cli_params! {
-    /// `pane.set_private`: hide a pane from socket API callers (`private: true`) or,
-    /// from the Herdr UI only, show it again (`private: false`).
-    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-    pub struct PaneSetPrivateParams => PaneSetPrivateProjection {
-        pub pane_id: String => Field::new(String::new()).input(binding::pane_id()),
-        #[serde(default = "super::common::default_true")]
-        pub private: bool => Field::new(true)
-            .input(Input::flag("on", |slot, _| { *slot = true; Ok(()) }).configure(|arg| arg.conflicts_with("off")))
-            .input(Input::flag("off", |slot, _| { *slot = false; Ok(()) })),
-    }
+/// `pane.access.set`: choose what socket API callers may do with a pane. The Herdr
+/// UI may set any mode; API callers may only remove bits, and not from a pane the
+/// user set explicitly. The CLI builds this from `herdr pane access <pane_id> MODE`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PaneAccessSetParams {
+    pub pane_id: String,
+    pub access: PaneAccess,
 }
 
 crate::cli::projection::cli_params! {
@@ -385,14 +382,23 @@ crate::cli::projection::cli_params! {
     }
 }
 
+/// `pane.send_input`: raw text and keys in one submission. Needs `w` access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PaneSendInputParams {
+    pub pane_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keys: Vec<String>,
+}
+
 crate::cli::projection::cli_params! {
+    /// `pane.run`: type a command line and press Enter. The structured way to
+    /// execute in a pane; needs `x` access.
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-    pub struct PaneSendInputParams => PaneRunProjection {
+    pub struct PaneRunParams => PaneRunProjection {
         pub pane_id: String => Field::new(String::new()).input(binding::pane_id()),
-        #[serde(default, skip_serializing_if = "String::is_empty")]
-        pub text: String => Field::new(String::new()).input(binding::joined("command", "COMMAND")),
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        pub keys: Vec<String> => Field::new(vec![String::from("Enter")]),
+        pub command: String => Field::new(String::new()).input(binding::joined("command", "COMMAND")),
     }
 }
 
@@ -515,10 +521,11 @@ pub struct PaneInfo {
     pub workspace_id: String,
     pub tab_id: String,
     pub focused: bool,
-    /// The pane is hidden from socket API callers: `pane.read` and input methods
-    /// return `pane_private`, and this record carries only identity fields.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub private: bool,
+    /// What socket API callers may do with this pane, like Unix permissions: `r`
+    /// read the screen and metadata, `w` send raw input, `x` run commands or prompt
+    /// the agent. Without `r` this record carries only identity fields.
+    #[serde(default)]
+    pub access: PaneAccess,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -1,7 +1,7 @@
 use super::harness::*;
 
 #[test]
-fn pane_private_hides_the_pane_from_the_api_and_only_the_ui_can_lift_it() {
+fn pane_access_tightens_from_the_api_and_only_the_ui_widens() {
     let base = unique_test_dir();
     let config_home = base.join("config");
     let runtime_dir = base.join("runtime");
@@ -19,37 +19,48 @@ fn pane_private_hides_the_pane_from_the_api_and_only_the_ui_can_lift_it() {
         .unwrap()
         .to_string();
 
-    let hidden = run_cli_json(&socket_path, &["pane", "private", &pane_id]);
-    assert_eq!(hidden["result"]["pane"]["private"], true);
-    assert!(hidden["result"]["pane"].get("cwd").is_none());
+    // Watch only: reads work, input and execution are refused.
+    let watch = run_cli_json(&socket_path, &["pane", "access", &pane_id, "r--"]);
+    assert_eq!(watch["result"]["pane"]["access"], "r--");
+    assert!(watch["result"]["pane"].get("cwd").is_some());
+    let read = run_cli(&socket_path, &["pane", "read", &pane_id]);
+    assert!(
+        read.status.success(),
+        "{}",
+        String::from_utf8_lossy(&read.stderr)
+    );
+    let run = run_cli(&socket_path, &["pane", "run", &pane_id, "echo", "hi"]);
+    assert!(!run.status.success());
+    let run_json: serde_json::Value = serde_json::from_slice(&run.stderr).unwrap();
+    assert_eq!(run_json["error"]["code"], "pane_access_denied");
 
+    // Private: still listed, identity only, every read refused.
+    let hidden = run_cli_json(&socket_path, &["pane", "access", &pane_id, "---"]);
+    assert_eq!(hidden["result"]["pane"]["access"], "---");
+    assert!(hidden["result"]["pane"].get("cwd").is_none());
     let read = run_cli(&socket_path, &["pane", "read", &pane_id]);
     assert!(!read.status.success());
     let read_json: serde_json::Value = serde_json::from_slice(&read.stderr).unwrap();
-    assert_eq!(read_json["error"]["code"], "pane_private");
-
+    assert_eq!(read_json["error"]["code"], "pane_access_denied");
     let keys = run_cli(&socket_path, &["pane", "send-keys", &pane_id, "enter"]);
     assert!(!keys.status.success());
-    let keys_json: serde_json::Value = serde_json::from_slice(&keys.stderr).unwrap();
-    assert_eq!(keys_json["error"]["code"], "pane_private");
-
     let listed = run_cli_json(&socket_path, &["pane", "list"]);
     let pane = listed["result"]["panes"]
         .as_array()
         .unwrap()
         .iter()
         .find(|pane| pane["pane_id"] == pane_id)
-        .expect("private pane stays listed");
-    assert_eq!(pane["private"], true);
+        .expect("a private pane stays listed");
+    assert_eq!(pane["access"], "---");
     assert!(pane.get("cwd").is_none());
 
-    let lifted = run_cli(&socket_path, &["pane", "private", &pane_id, "--off"]);
-    assert!(!lifted.status.success());
-    let lifted_json: serde_json::Value = serde_json::from_slice(&lifted.stderr).unwrap();
-    assert_eq!(lifted_json["error"]["code"], "pane_private");
-
-    let still = run_cli_json(&socket_path, &["pane", "get", &pane_id]);
-    assert_eq!(still["result"]["pane"]["private"], true);
+    // Widening is only for the Herdr UI; `pane access` without a mode shows the pane.
+    let widened = run_cli(&socket_path, &["pane", "access", &pane_id, "rwx"]);
+    assert!(!widened.status.success());
+    let widened_json: serde_json::Value = serde_json::from_slice(&widened.stderr).unwrap();
+    assert_eq!(widened_json["error"]["code"], "pane_access_denied");
+    let shown = run_cli_json(&socket_path, &["pane", "access", &pane_id]);
+    assert_eq!(shown["result"]["pane"]["access"], "---");
 
     cleanup_spawned_herdr(herdr, base);
 }

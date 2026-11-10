@@ -260,13 +260,14 @@ impl App {
         id: &str,
         params: &PaneLinkActivateParams,
         operation: &str,
+        need: crate::pane_access::PaneAccessBit,
         read: impl FnOnce(&crate::terminal::TerminalRuntime, u16, u16) -> T,
     ) -> Result<(crate::layout::PaneId, T), String> {
         let error = |code, message: &str| encode_error(id.to_owned(), code, message);
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&params.pane_id) else {
             return Err(error("pane_not_found", "pane not found"));
         };
-        if let Some(refusal) = self.private_pane_refusal(id, ws_idx, pane_id) {
+        if let Some(refusal) = self.pane_access_refusal(id, ws_idx, pane_id, need) {
             return Err(refusal);
         }
         if !self.state.pane_visible_on_active_surface(ws_idx, pane_id) {
@@ -321,9 +322,15 @@ impl App {
         id: String,
         params: PaneLinkActivateParams,
     ) -> String {
-        match self.read_checked_pane_link(&id, &params, "resolution", |runtime, col, row| {
-            runtime.link_regions_at(col, row, crate::app::actions::url_byte_range)
-        }) {
+        match self.read_checked_pane_link(
+            &id,
+            &params,
+            "resolution",
+            crate::pane_access::PaneAccessBit::Read,
+            |runtime, col, row| {
+                runtime.link_regions_at(col, row, crate::app::actions::url_byte_range)
+            },
+        ) {
             Ok((_, regions)) => encode_success(id, ResponseResult::PaneLinkResolved { regions }),
             Err(error) => error,
         }
@@ -334,15 +341,20 @@ impl App {
         id: String,
         params: PaneLinkActivateParams,
     ) -> String {
-        let (pane_id, url) =
-            match self.read_checked_pane_link(&id, &params, "activation", |runtime, col, row| {
+        let (pane_id, url) = match self.read_checked_pane_link(
+            &id,
+            &params,
+            "activation",
+            crate::pane_access::PaneAccessBit::Exec,
+            |runtime, col, row| {
                 runtime
                     .link_target_at(col, row)
                     .and_then(crate::app::actions::url_from_link_target)
-            }) {
-                Ok(value) => value,
-                Err(error) => return error,
-            };
+            },
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
+        };
         let handled = match url.as_deref() {
             Some(url) => match self.invoke_plugin_link_handler_for_url(url, pane_id) {
                 Ok(handled) => handled,
@@ -863,10 +875,15 @@ mod tests {
             let response: serde_json::Value = serde_json::from_str(&response).unwrap();
             assert_eq!(response["error"]["code"], "stale_content");
         }
-        let changed =
-            app.read_checked_pane_link("hover", &params, "resolution", |runtime, _, _| {
+        let changed = app.read_checked_pane_link(
+            "hover",
+            &params,
+            "resolution",
+            crate::pane_access::PaneAccessBit::Read,
+            |runtime, _, _| {
                 runtime.test_process_pty_bytes(b"changed");
-            });
+            },
+        );
         let response: serde_json::Value = serde_json::from_str(&changed.unwrap_err()).unwrap();
         assert_eq!(response["error"]["code"], "stale_content");
         assert_eq!(

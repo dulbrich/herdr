@@ -299,7 +299,7 @@ impl App {
             .insert(terminal_id.clone(), new_pane.runtime);
         self.state
             .remove_alias_shadowed_by_new_pane(new_pane.pane_id);
-        self.state.terminals.insert(terminal_id, terminal);
+        self.state.adopt_terminal(terminal);
         self.state.plugin_panes.insert(
             new_pane.pane_id,
             crate::app::state::PluginPaneRecord {

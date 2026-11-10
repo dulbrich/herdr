@@ -29,6 +29,8 @@ pub use tabs::*;
 pub use workspaces::*;
 pub use worktrees::*;
 
+pub use crate::pane_access::PaneAccess;
+
 fn is_false(value: &bool) -> bool {
     !*value
 }
@@ -145,7 +147,8 @@ operations::define_operations! {
     PluginPaneOpen(PluginPaneOpenParams) => "plugin.pane.open", true, false;
     PluginPaneFocus(PluginPaneFocusParams) => "plugin.pane.focus", true, false;
     PluginPaneClose(PluginPaneCloseParams) => "plugin.pane.close", true, false;
-    PaneSetPrivate(PaneSetPrivateParams) => "pane.set_private", true, true;
+    PaneAccessSet(PaneAccessSetParams) => "pane.access.set", true, true;
+    PaneRun(PaneRunParams) => "pane.run", false, false;
 }
 
 #[cfg(test)]

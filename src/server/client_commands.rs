@@ -255,8 +255,8 @@ mod tests {
             Some("f5e4a3e01453ae7b188f127ce951c12c20e0bebcc17cc364eeb6d1a01fd5bf81")
         );
         assert_eq!(
-            actual.remove("pane.set_private").as_deref(),
-            Some("d55bbd89c631027e61be9ecbc00d85a5044e7ec5dc23230e365fc2f197b77a64")
+            actual.remove("pane.access.set").as_deref(),
+            Some("e6e186149d3327107d06beea1ad6fe57a71ccf9e893c786f9df48b16f0428666")
         );
 
         assert_eq!(

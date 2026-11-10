@@ -145,7 +145,7 @@ impl App {
         let new_root_pane = self.state.workspaces[ws_idx].tabs[new_tab_idx].root_pane;
         self.terminal_runtimes.insert(terminal.id.clone(), runtime);
         self.state.remove_alias_shadowed_by_new_pane(new_root_pane);
-        self.state.terminals.insert(terminal.id.clone(), terminal);
+        self.state.adopt_terminal(terminal);
         if let Some(label) = replacement_label {
             self.state.workspaces[ws_idx].tabs[new_tab_idx].set_custom_name(label);
         }

@@ -101,7 +101,19 @@ pub struct PaneSnapshot {
     pub cwd: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[serde(
+        default,
+        skip_serializing_if = "crate::pane_access::PaneAccess::is_full"
+    )]
+    pub access: crate::pane_access::PaneAccess,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::pane_access::PaneAccessSource::is_default"
+    )]
+    pub access_source: crate::pane_access::PaneAccessSource,
+    /// Written by builds before access modes existed; never written now. True
+    /// restores as `---`, user-set.
+    #[serde(default, skip_serializing)]
     pub private: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_name: Option<String>,
@@ -113,6 +125,25 @@ pub struct PaneSnapshot {
     pub agent_resume: Option<PaneAgentResumeSnapshot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub launch_argv: Option<Vec<String>>,
+}
+
+impl PaneSnapshot {
+    /// The access mode to restore, honouring the legacy `private` flag.
+    pub fn restored_access(
+        &self,
+    ) -> (
+        crate::pane_access::PaneAccess,
+        crate::pane_access::PaneAccessSource,
+    ) {
+        if self.private {
+            (
+                crate::pane_access::PaneAccess::NONE,
+                crate::pane_access::PaneAccessSource::User,
+            )
+        } else {
+            (self.access, self.access_source)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -340,7 +371,9 @@ fn capture_tab(
             .or_else(|| terminal.map(|terminal| terminal.cwd.clone()))
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| "/".into()));
         let label = terminal.and_then(|terminal| terminal.manual_label.clone());
-        let private = terminal.is_some_and(|terminal| terminal.private);
+        let (access, access_source) = terminal.map_or(Default::default(), |terminal| {
+            (terminal.access, terminal.access_source)
+        });
         let (agent_name, managed_agent_kind) = terminal
             .filter(|terminal| !terminal.managed_agent_launch_pending())
             .map(|terminal| {
@@ -386,7 +419,9 @@ fn capture_tab(
             PaneSnapshot {
                 cwd,
                 label,
-                private,
+                access,
+                access_source,
+                private: false,
                 agent_name,
                 managed_agent_kind,
                 agent_session,
@@ -599,8 +634,10 @@ mod tests {
     }
 
     #[test]
-    fn private_pane_flag_is_captured_and_survives_json_round_trip() {
-        let mut state = state_with_workspaces(&["private-snapshot"]);
+    fn pane_access_is_captured_and_a_legacy_private_flag_restores_as_hidden() {
+        use crate::pane_access::{PaneAccess, PaneAccessSource};
+
+        let mut state = state_with_workspaces(&["access-snapshot"]);
         let root = state.workspaces[0].tabs[0].root_pane;
         let terminal_id = state.workspaces[0].tabs[0].panes[&root]
             .attached_terminal_id
@@ -609,19 +646,48 @@ mod tests {
             .terminals
             .get_mut(&terminal_id)
             .unwrap()
-            .set_private(true));
+            .set_access(PaneAccess::READ_ONLY, PaneAccessSource::Program));
 
         let captured = capture_from_state(&state);
-        assert!(captured.workspaces[0].tabs[0].panes[&root.raw()].private);
+        let pane = &captured.workspaces[0].tabs[0].panes[&root.raw()];
+        assert_eq!(pane.access, PaneAccess::READ_ONLY);
+        assert_eq!(pane.access_source, PaneAccessSource::Program);
 
         let json = serde_json::to_string(&captured).unwrap();
+        assert!(
+            json.contains("\"access\":\"r--\",\"access_source\":\"program\""),
+            "{json}"
+        );
+        assert!(
+            !json.contains("\"private\""),
+            "the legacy flag is never written"
+        );
         let restored: SessionSnapshot = serde_json::from_str(&json).unwrap();
-        assert!(restored.workspaces[0].tabs[0].panes[&root.raw()].private);
+        assert_eq!(
+            restored.workspaces[0].tabs[0].panes[&root.raw()].restored_access(),
+            (PaneAccess::READ_ONLY, PaneAccessSource::Program)
+        );
 
-        // A snapshot written before the flag existed reads as not private.
-        let legacy = json.replace("\"private\":true", "\"label\":\"old\"");
+        // A snapshot from the private-flag build restores as hidden and user-set.
+        let legacy = json.replace(
+            "\"access\":\"r--\",\"access_source\":\"program\"",
+            "\"private\":true",
+        );
+        assert_ne!(legacy, json);
         let legacy: SessionSnapshot = serde_json::from_str(&legacy).unwrap();
-        assert!(!legacy.workspaces[0].tabs[0].panes[&root.raw()].private);
+        assert_eq!(
+            legacy.workspaces[0].tabs[0].panes[&root.raw()].restored_access(),
+            (PaneAccess::NONE, PaneAccessSource::User)
+        );
+
+        // A snapshot that never heard of access modes reads as the full default.
+        let plain = json.replace(",\"access\":\"r--\",\"access_source\":\"program\"", "");
+        assert_ne!(plain, json);
+        let plain: SessionSnapshot = serde_json::from_str(&plain).unwrap();
+        assert_eq!(
+            plain.workspaces[0].tabs[0].panes[&root.raw()].restored_access(),
+            (PaneAccess::FULL, PaneAccessSource::Default)
+        );
     }
 
     #[test]
@@ -730,6 +796,8 @@ mod tests {
         panes.insert(
             0,
             PaneSnapshot {
+                access: Default::default(),
+                access_source: Default::default(),
                 private: false,
                 cwd: PathBuf::from("/home/can/Projects/herdr"),
                 label: None,
@@ -743,6 +811,8 @@ mod tests {
         panes.insert(
             1,
             PaneSnapshot {
+                access: Default::default(),
+                access_source: Default::default(),
                 private: false,
                 cwd: PathBuf::from("/home/can/Projects/website"),
                 label: Some("website".into()),
@@ -1430,6 +1500,8 @@ mod tests {
         panes.insert(
             0,
             PaneSnapshot {
+                access: Default::default(),
+                access_source: Default::default(),
                 private: false,
                 cwd: PathBuf::from("/tmp/this-directory-does-not-exist-for-herdr-test"),
                 label: None,
@@ -1443,6 +1515,8 @@ mod tests {
         panes.insert(
             1,
             PaneSnapshot {
+                access: Default::default(),
+                access_source: Default::default(),
                 private: false,
                 cwd: std::env::var("HOME")
                     .map(PathBuf::from)
